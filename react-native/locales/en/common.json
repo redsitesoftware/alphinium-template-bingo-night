@@ -1,0 +1,40 @@
+{
+  "app": {
+    "name": "Alphinium",
+    "tagline": "Your AI-powered development platform"
+  },
+  "nav": {
+    "home": "Home",
+    "login": "Login",
+    "pricing": "Pricing",
+    "settings": "Settings",
+    "back": "Back"
+  },
+  "auth": {
+    "login": "Login",
+    "logout": "Logout",
+    "signup": "Sign Up",
+    "email": "Email",
+    "password": "Password",
+    "loggingIn": "Logging in...",
+    "noAccount": "Don't have an account?",
+    "haveAccount": "Already have an account?"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "retry": "Try Again",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "close": "Close",
+    "next": "Next",
+    "done": "Done"
+  },
+  "errors": {
+    "network": "Network error. Please check your connection.",
+    "unauthorized": "Please log in to continue.",
+    "notFound": "Not found.",
+    "generic": "An unexpected error occurred. Please try again."
+  }
+}

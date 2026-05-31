@@ -1,0 +1,28 @@
+{
+  "name": "bingo-night",
+  "version": "1.0.0",
+  "description": "Bingo Night — AI-hosted bingo for pubs, venues, and events",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "web": "expo start --web",
+    "build": "expo export --platform web"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~4.0.1",
+    "dotenv": "^17.3.1",
+    "expo": "~52.0.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-native": "0.76.5",
+    "react-native-gesture-handler": "^2.21.2",
+    "react-native-safe-area-context": "^5.7.0",
+    "react-native-screens": "^4.4.0",
+    "react-native-web": "~0.19.13",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "typescript": "^6.0.3"
+  }
+}
