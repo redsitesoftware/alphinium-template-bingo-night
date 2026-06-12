@@ -7,6 +7,7 @@ import HomeScreen from '../screens/HomeScreen';
 import CardScreen from '../screens/CardScreen';
 import WinScreen from '../screens/WinScreen';
 import FullHouseScreen from '../screens/FullHouseScreen';
+import SpectatorScreen from '../screens/SpectatorScreen';
 
 export default function AppNavigator() {
   const phase = useBingoStore(s => s.phase);
@@ -19,6 +20,8 @@ export default function AppNavigator() {
       return <WinScreen />;
     case 'fullhouse':
       return <FullHouseScreen />;
+    case 'spectating':
+      return <SpectatorScreen />;
     default:
       return <HomeScreen />;
   }
