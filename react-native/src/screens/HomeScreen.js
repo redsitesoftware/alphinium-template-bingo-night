@@ -16,7 +16,8 @@ export default function HomeScreen() {
   const [joinCode, setJoinCode] = useState('');
   const [joinName, setJoinName] = useState('');
   const [dauber, setDauber] = useState(colors.daubers[0]);
-  const { startAsHost, joinAsPlayer, setDauber: storeDauber } = useBingoStore();
+  const [spectateCode, setSpectateCode] = useState('');
+  const { startAsHost, joinAsPlayer, joinAsSpectator, setDauber: storeDauber } = useBingoStore();
 
   const handleHost = () => {
     storeDauber(dauber);
@@ -26,6 +27,10 @@ export default function HomeScreen() {
   const handleJoin = () => {
     storeDauber(dauber);
     joinAsPlayer(joinCode, joinName.trim(), themeId);
+  };
+
+  const handleSpectate = () => {
+    joinAsSpectator(spectateCode);
   };
 
   if (mode === 'host') {
@@ -68,6 +73,47 @@ export default function HomeScreen() {
               disabled={!name.trim()} onPress={handleHost}>
               <Text style={s.btnText}>Generate Cards & Start 🎱</Text>
             </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
+
+  if (mode === 'spectate') {
+    return (
+      <SafeAreaView style={s.safe}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.flex}>
+          <ScrollView contentContainerStyle={s.content}>
+            <TouchableOpacity onPress={() => setMode('home')} style={s.back}>
+              <Text style={s.backText}>← Back</Text>
+            </TouchableOpacity>
+            <Text style={s.bigEmoji}>👁️</Text>
+            <Text style={s.title}>Watch a Game</Text>
+            <Text style={s.sub}>See called numbers and who wins — no card needed</Text>
+
+            <Text style={s.label}>Room code</Text>
+            <TextInput
+              style={[s.input, s.codeInput]}
+              placeholder="e.g. B4NG"
+              placeholderTextColor={colors.textMuted}
+              value={spectateCode}
+              onChangeText={t => setSpectateCode(t.toUpperCase())}
+              maxLength={4}
+              autoCapitalize="characters"
+              autoFocus
+            />
+
+            <TouchableOpacity
+              style={[s.btn, s.btnSpectate, !spectateCode.trim() && s.btnDisabled]}
+              disabled={!spectateCode.trim()}
+              onPress={handleSpectate}
+            >
+              <Text style={s.btnText}>Watch Game →</Text>
+            </TouchableOpacity>
+
+            <Text style={s.spectateNote}>
+              Perfect for event screens and displays. No bingo card issued.
+            </Text>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -144,6 +190,9 @@ export default function HomeScreen() {
         <TouchableOpacity style={[s.btn, s.btnSecondary]} onPress={() => setMode('join')}>
           <Text style={s.btnText}>🎟️ Join with Code</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={[s.btn, s.btnSpectate]} onPress={() => setMode('spectate')}>
+          <Text style={s.btnText}>👁️ Watch as Spectator</Text>
+        </TouchableOpacity>
         <Text style={s.demoNote}>Demo mode — no account required</Text>
       </ScrollView>
     </SafeAreaView>
@@ -188,7 +237,9 @@ const s = StyleSheet.create({
   dauberActive:   { borderWidth: 3, borderColor: colors.white },
   btn:            { backgroundColor: colors.primary, borderRadius: radius.md, padding: spacing.md, alignItems: 'center', marginBottom: spacing.md },
   btnSecondary:   { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary },
+  btnSpectate:    { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.accentPurple },
   btnDisabled:    { opacity: 0.4 },
   btnText:        { color: colors.black, fontSize: 17, fontWeight: '800' },
   demoNote:       { textAlign: 'center', color: colors.textMuted, fontSize: 13, marginTop: spacing.md },
+  spectateNote:   { textAlign: 'center', color: colors.textMuted, fontSize: 12, marginTop: spacing.md, fontStyle: 'italic' },
 });

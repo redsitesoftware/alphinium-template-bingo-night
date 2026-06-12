@@ -110,12 +110,13 @@ function checkWin(marked, card) {
 
 export const useBingoStore = create((set, get) => ({
   // Session
-  phase: 'home',          // home | setup | card | calling | win | fullhouse
+  phase: 'home',          // home | setup | card | calling | win | fullhouse | spectating
   themeId: 'office',
   dauberColor: '#EF4444',
   playerName: '',
   sessionCode: '',
   isHost: false,
+  isSpectator: false,
 
   // Card
   card: [],               // 25 strings
@@ -152,6 +153,22 @@ export const useBingoStore = create((set, get) => ({
       wins: [],
       calledItems: [],
       callQueue: pool,
+      isCalling: false,
+    });
+  },
+
+  joinAsSpectator: (code) => {
+    set({
+      phase: 'spectating',
+      isHost: false,
+      isSpectator: true,
+      playerName: '',
+      sessionCode: code.toUpperCase(),
+      card: [],
+      marked: new Set(),
+      wins: [],
+      calledItems: [],
+      callQueue: [],
       isCalling: false,
     });
   },
@@ -225,5 +242,6 @@ export const useBingoStore = create((set, get) => ({
     callQueue: [],
     isCalling: false,
     sessionCode: '',
+    isSpectator: false,
   }),
 }));
