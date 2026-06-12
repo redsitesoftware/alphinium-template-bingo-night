@@ -153,7 +153,7 @@ export default function HomeScreen() {
 const s = StyleSheet.create({
   safe:           { flex: 1, backgroundColor: colors.bg },
   flex:           { flex: 1 },
-  content:        { padding: spacing.xl, paddingTop: spacing.xxl, flexGrow: 1 },
+  content:        { padding: spacing.xl, paddingTop: spacing.xxl, flexGrow: 1, maxWidth: 480, width: '100%', alignSelf: 'center' },
   back:           { marginBottom: spacing.xl },
   backText:       { color: colors.primary, fontSize: 16 },
   hero:           { alignItems: 'center', marginBottom: spacing.xxl },
