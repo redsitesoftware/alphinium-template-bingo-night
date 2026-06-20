@@ -14,6 +14,12 @@ This app was scaffolded, built, and deployed entirely by alphinium's autonomous 
 - **DEV** agents implement features and open pull requests
 - **OPS** agents deploy previews and production releases
 
+## Configuration
+
+| Variable | Description | Default | Notes |
+|---|---|---|---|
+| `EXPO_PUBLIC_GA_ID` | GA4 Measurement ID | `G-X09N3J8X17` | Override with your own GA property when going live |
+
 ## About alphinium
 
 alphinium is an autonomous software development platform. Give it a goal — it ships.
