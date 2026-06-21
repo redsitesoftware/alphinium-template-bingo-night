@@ -56,7 +56,8 @@ let _keepAliveTimer = null;
 const _keepAliveMs = parseInt(process.env.KEEP_ALIVE_INTERVAL_MS || '50000', 10);
 
 function startKeepAlive(baseUrl) {
-  if (_keepAliveTimer || _keepAliveMs <= 0) return;
+  if (_keepAliveMs <= 0) return;
+  if (_keepAliveTimer) { clearInterval(_keepAliveTimer); _keepAliveTimer = null; }
   const https = require('https');
   const pingUrl = `${baseUrl.replace(/\/$/, '')}/rooms`;
   _keepAliveTimer = setInterval(() => {
