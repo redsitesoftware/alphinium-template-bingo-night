@@ -56,3 +56,5 @@ registerGameHandlers(wss);
 server.listen(PORT, () => {
   console.log(`Bingo Night server listening on port ${PORT}`);
 });
+
+module.exports = { app, server, wss };

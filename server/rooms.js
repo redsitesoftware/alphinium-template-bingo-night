@@ -84,19 +84,42 @@ function createUniqueCode() {
 }
 
 /**
+ * Fisher-Yates shuffle — returns a new shuffled array.
+ * @template T
+ * @param {T[]} arr
+ * @returns {T[]}
+ */
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/**
  * Create a new room and store it.
- * @param {string} hostName
- * @param {string} themeId
+ * @param {string|{hostName:string,themeId?:string}} hostNameOrOpts
+ * @param {string} [themeId]
  * @returns {object} The created room
  */
-function createRoom(hostName, themeId) {
+function createRoom(hostNameOrOpts, themeId) {
+  // Support both createRoom('Alice','t1') and createRoom({hostName:'Alice',themeId:'t1'})
+  let hostName;
+  if (typeof hostNameOrOpts === 'object') {
+    ({ hostName, themeId } = hostNameOrOpts);
+  } else {
+    hostName = hostNameOrOpts;
+  }
+
   const code = createUniqueCode();
   const now = new Date();
   const pool = CALLS_BY_THEME[themeId] || CALLS_BY_THEME.office;
   const room = {
     code,
     hostName,
-    themeId,
+    themeId: themeId || null,
     players: [],
     createdAt: now,
     lastActivityAt: now,
@@ -124,6 +147,11 @@ function getRoom(code) {
   return room;
 }
 
+/** Touch lastActivityAt without a full getRoom lookup (used by routes). */
+function touchRoom(room) {
+  room.lastActivityAt = new Date();
+}
+
 /**
  * Add a player to a room.
  * @param {string} code
@@ -136,6 +164,68 @@ function joinRoom(code, playerName) {
   room.players.push({ name: playerName, joinedAt: new Date() });
   room.lastActivityAt = new Date();
   return room;
+}
+
+/**
+ * Pop the next item from callQueue into calledItems.
+ * @param {string} code
+ * @returns {*} The called item, or null if queue is empty or room not found
+ */
+function nextCall(code) {
+  const room = rooms.get(code);
+  if (!room || room.callQueue.length === 0) return null;
+  const item = room.callQueue.shift();
+  room.calledItems.push(item);
+  room.lastActivityAt = new Date();
+  return item;
+}
+
+/**
+ * Return a serialisable snapshot of a room (excludes the clients Set).
+ * @param {string} code
+ * @returns {object|null}
+ */
+function getRoomState(code) {
+  const room = rooms.get(code);
+  if (!room) return null;
+  const { clients, ...state } = room;  // eslint-disable-line no-unused-vars
+  return state;
+}
+
+/**
+ * Add a WebSocket client to the room's client set.
+ * @param {string} code
+ * @param {import('ws').WebSocket} ws
+ */
+function addClient(code, ws) {
+  const room = rooms.get(code);
+  if (room) room.clients.add(ws);
+}
+
+/**
+ * Remove a WebSocket client from the room's client set.
+ * @param {string} code
+ * @param {import('ws').WebSocket} ws
+ */
+function removeClient(code, ws) {
+  const room = rooms.get(code);
+  if (room) room.clients.delete(ws);
+}
+
+/**
+ * Broadcast a JSON payload to all OPEN clients in the room.
+ * @param {string} code
+ * @param {object} payload
+ */
+function broadcastToRoom(code, payload) {
+  const room = rooms.get(code);
+  if (!room) return;
+  const message = JSON.stringify(payload);
+  for (const client of room.clients) {
+    if (client.readyState === 1 /* WebSocket.OPEN */) {
+      client.send(message);
+    }
+  }
 }
 
 /**
@@ -154,66 +244,15 @@ function pruneExpiredRooms() {
 // Run expiry cleanup every 5 minutes
 setInterval(pruneExpiredRooms, 5 * 60 * 1000);
 
-/**
- * Pop the next item from callQueue into calledItems.
- * @param {string} code
- * @returns {string|null} The called item, or null if queue is empty
- */
-function nextCall(code) {
-  const room = rooms.get(code);
-  if (!room || room.callQueue.length === 0) return null;
-  const item = room.callQueue.shift();
-  room.calledItems.push(item);
-  room.lastActivityAt = new Date();
-  return item;
-}
-
-/**
- * Return a serialisable snapshot of the room (excludes clients Set).
- * @param {string} code
- * @returns {object|null}
- */
-function getRoomState(code) {
-  const room = rooms.get(code);
-  if (!room) return null;
-  const { clients, ...state } = room;
-  return state;
-}
-
-/**
- * Add a WebSocket client to a room's client set.
- * @param {string} code
- * @param {WebSocket} ws
- */
-function addClient(code, ws) {
-  const room = rooms.get(code);
-  if (room) room.clients.add(ws);
-}
-
-/**
- * Remove a WebSocket client from a room's client set.
- * @param {string} code
- * @param {WebSocket} ws
- */
-function removeClient(code, ws) {
-  const room = rooms.get(code);
-  if (room) room.clients.delete(ws);
-}
-
-/**
- * Broadcast a JSON payload to all OPEN clients in a room.
- * @param {string} code
- * @param {object} payload
- */
-function broadcastToRoom(code, payload) {
-  const room = rooms.get(code);
-  if (!room) return;
-  const message = JSON.stringify(payload);
-  for (const client of room.clients) {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(message);
-    }
-  }
-}
-
-module.exports = { rooms, createRoom, getRoom, joinRoom, nextCall, getRoomState, addClient, removeClient, broadcastToRoom };
+module.exports = {
+  rooms,
+  createRoom,
+  getRoom,
+  touchRoom,
+  joinRoom,
+  nextCall,
+  getRoomState,
+  addClient,
+  removeClient,
+  broadcastToRoom,
+};
