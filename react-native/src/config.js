@@ -14,6 +14,9 @@ export const STRAPI_API_TOKEN = process.env.EXPO_PUBLIC_API_TOKEN || '';
 // Stripe Configuration
 export const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
 
+// Room API — set EXPO_PUBLIC_ROOM_API_URL at build time for deployed pods
+export const ROOM_API_URL = process.env.EXPO_PUBLIC_ROOM_API_URL || '';
+
 // App Configuration — set EXPO_PUBLIC_APP_NAME at build time to brand your Forge project
 export const APP_NAME = process.env.EXPO_PUBLIC_APP_NAME || 'My App';
 export const APP_VERSION = '1.0.0';

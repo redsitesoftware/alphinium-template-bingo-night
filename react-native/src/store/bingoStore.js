@@ -3,6 +3,7 @@
  * Zustand store. Full 5x5 bingo card, AI caller simulation, dauber marking.
  */
 import { create } from 'zustand';
+import { RoomService } from '../services/RoomService';
 
 // --- Themed bingo call sets ---
 export const THEMES = [
@@ -116,6 +117,7 @@ export const useBingoStore = create((set, get) => ({
   playerName: '',
   sessionCode: '',
   isHost: false,
+  roomError: null,        // null | string — API error message for UI display
 
   // Card
   card: [],               // 25 strings
@@ -133,43 +135,65 @@ export const useBingoStore = create((set, get) => ({
   setDauber: (color) => set({ dauberColor: color }),
   setPlayerName: (name) => set({ playerName: name }),
 
-  startAsHost: (name, themeId) => {
-    const code = Math.random().toString(36).substr(2, 4).toUpperCase();
-    const card = generateCard(themeId);
-    const pool = [...(CALLS_BY_THEME[themeId] || CALLS_BY_THEME.office)];
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
+  startAsHost: async (name, themeId) => {
+    set({ roomError: null });
+    try {
+      const room = await RoomService.createRoom(name, themeId);
+      const code = room.code;
+      const card = generateCard(themeId);
+      const pool = [...(CALLS_BY_THEME[themeId] || CALLS_BY_THEME.office)];
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      set({
+        phase: 'card',
+        isHost: true,
+        playerName: name,
+        sessionCode: code,
+        themeId,
+        card,
+        marked: new Set([12]), // FREE center
+        wins: [],
+        calledItems: [],
+        callQueue: pool,
+        isCalling: false,
+      });
+    } catch (err) {
+      set({ roomError: err.message || 'Failed to create room' });
     }
-    set({
-      phase: 'card',
-      isHost: true,
-      playerName: name,
-      sessionCode: code,
-      themeId,
-      card,
-      marked: new Set([12]), // FREE center
-      wins: [],
-      calledItems: [],
-      callQueue: pool,
-      isCalling: false,
-    });
   },
 
-  joinAsPlayer: (code, name, themeId) => {
-    const card = generateCard(themeId);
-    set({
-      phase: 'card',
-      isHost: false,
-      playerName: name,
-      sessionCode: code.toUpperCase(),
-      themeId,
-      card,
-      marked: new Set([12]),
-      wins: [],
-      calledItems: [],
-      callQueue: [],
-    });
+  joinAsPlayer: async (code, name, themeId) => {
+    set({ roomError: null });
+    try {
+      await RoomService.joinRoom(code, name);
+      const card = generateCard(themeId);
+      set({
+        phase: 'card',
+        isHost: false,
+        playerName: name,
+        sessionCode: code.toUpperCase(),
+        themeId,
+        card,
+        marked: new Set([12]),
+        wins: [],
+        calledItems: [],
+        callQueue: [],
+        roomError: null,
+      });
+    } catch (err) {
+      const status = err.status;
+      let message;
+      if (status === 404) {
+        message = 'Room not found. Check your code and try again.';
+      } else if (status === 409) {
+        message = 'That name is already taken in this room. Try a different name.';
+      } else {
+        message = err.message || 'Failed to join room';
+      }
+      set({ roomError: message });
+    }
   },
 
   // Daub a square
@@ -225,5 +249,6 @@ export const useBingoStore = create((set, get) => ({
     callQueue: [],
     isCalling: false,
     sessionCode: '',
+    roomError: null,
   }),
 }));
