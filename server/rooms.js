@@ -2,7 +2,7 @@ const { customAlphabet } = require('nanoid');
 const { WebSocket } = require('ws');
 
 const CODE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-const generateCode = customAlphabet(CODE_ALPHABET, 6);
+const _rawCode = customAlphabet(CODE_ALPHABET, 6);
 
 /** @type {Map<string, object>} */
 const rooms = new Map();
@@ -75,10 +75,10 @@ function shuffled(arr) {
  * Generate a unique 6-char alphanumeric room code (A-Z0-9).
  * Retries on collision.
  */
-function createUniqueCode() {
+function generateCode() {
   let code;
   do {
-    code = generateCode();
+    code = _rawCode();
   } while (rooms.has(code));
   return code;
 }
@@ -113,7 +113,7 @@ function createRoom(hostNameOrOpts, themeId) {
     hostName = hostNameOrOpts;
   }
 
-  const code = createUniqueCode();
+  const code = generateCode();
   const now = new Date();
   const pool = CALLS_BY_THEME[themeId] || CALLS_BY_THEME.office;
   const room = {
@@ -246,6 +246,7 @@ setInterval(pruneExpiredRooms, 5 * 60 * 1000);
 
 module.exports = {
   rooms,
+  generateCode,
   createRoom,
   getRoom,
   touchRoom,
@@ -255,4 +256,5 @@ module.exports = {
   addClient,
   removeClient,
   broadcastToRoom,
+  pruneExpiredRooms,
 };

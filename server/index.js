@@ -19,8 +19,8 @@ app.get('/health', (_req, res) => {
 // POST /rooms — create a new room
 app.post('/rooms', (req, res) => {
   const { hostName, themeId } = req.body;
-  if (!hostName || !themeId) {
-    return res.status(400).json({ error: 'hostName and themeId are required' });
+  if (!hostName) {
+    return res.status(400).json({ error: 'hostName is required' });
   }
   const room = createRoom(hostName, themeId);
   res.status(201).json(room);
@@ -41,10 +41,14 @@ app.post('/rooms/:code/join', (req, res) => {
   if (!playerName) {
     return res.status(400).json({ error: 'playerName is required' });
   }
-  const room = joinRoom(req.params.code.toUpperCase(), playerName);
+  const room = getRoom(req.params.code.toUpperCase());
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
   }
+  if (room.phase === 'ended') {
+    return res.status(409).json({ error: 'Room has ended' });
+  }
+  room.players.push({ name: playerName, joinedAt: new Date() });
   res.json(room);
 });
 
@@ -53,8 +57,10 @@ const wss = new WebSocketServer({ server });
 
 registerGameHandlers(wss);
 
-server.listen(PORT, () => {
-  console.log(`Bingo Night server listening on port ${PORT}`);
-});
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`Bingo Night server listening on port ${PORT}`);
+  });
+}
 
-module.exports = { app, server, wss };
+module.exports = app;
