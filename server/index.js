@@ -2,7 +2,7 @@ const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const { WebSocketServer } = require('ws');
-const { createRoom, getRoom, joinRoom } = require('./rooms');
+const roomsRouter = require('./routes/rooms');
 const { registerGameHandlers } = require('./game');
 
 const app = express();
@@ -16,41 +16,7 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-// POST /rooms — create a new room
-app.post('/rooms', (req, res) => {
-  const { hostName, themeId } = req.body;
-  if (!hostName) {
-    return res.status(400).json({ error: 'hostName is required' });
-  }
-  const room = createRoom(hostName, themeId);
-  res.status(201).json(room);
-});
-
-// GET /rooms/:code — get room details
-app.get('/rooms/:code', (req, res) => {
-  const room = getRoom(req.params.code.toUpperCase());
-  if (!room) {
-    return res.status(404).json({ error: 'Room not found' });
-  }
-  res.json(room);
-});
-
-// POST /rooms/:code/join — join a room
-app.post('/rooms/:code/join', (req, res) => {
-  const { playerName } = req.body;
-  if (!playerName) {
-    return res.status(400).json({ error: 'playerName is required' });
-  }
-  const room = getRoom(req.params.code.toUpperCase());
-  if (!room) {
-    return res.status(404).json({ error: 'Room not found' });
-  }
-  if (room.phase === 'ended') {
-    return res.status(409).json({ error: 'Room has ended' });
-  }
-  room.players.push({ name: playerName, joinedAt: new Date() });
-  res.json(room);
-});
+app.use('/rooms', roomsRouter);
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
