@@ -7,7 +7,12 @@ const { registerGameHandlers } = require('./game');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'http://localhost:8081';
+
+// In two-pod deployments nginx proxies /rooms to this server, so browser requests
+// are same-origin and never trigger CORS.  The CORS middleware mainly matters for
+// direct cross-origin calls (e.g. local dev or PO UAT tools hitting the server pod
+// URL directly).  Default to '*' so those calls work without extra OPS config.
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || '*';
 
 app.use(cors({ origin: FRONTEND_ORIGIN }));
 app.use(express.json());
