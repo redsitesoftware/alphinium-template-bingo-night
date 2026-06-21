@@ -26,6 +26,17 @@ registerGameHandlers(wss);
 if (require.main === module) {
   server.listen(PORT, () => {
     console.log(`Bingo Night server listening on port ${PORT}`);
+
+    // Self-ping keep-alive: prevents pod from being cleaned up due to inactivity.
+    // Interval is configurable via KEEP_ALIVE_INTERVAL_MS (0 to disable).
+    const keepAliveMs = parseInt(process.env.KEEP_ALIVE_INTERVAL_MS || '50000', 10);
+    if (keepAliveMs > 0) {
+      setInterval(() => {
+        http.get(`http://localhost:${PORT}/health`, (res) => {
+          res.resume();
+        }).on('error', () => {});
+      }, keepAliveMs);
+    }
   });
 }
 
