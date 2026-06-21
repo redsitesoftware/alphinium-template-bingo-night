@@ -21,24 +21,32 @@ const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || '*';
 // timer.  We must ping a real application route through the public URL so the
 // request actually traverses the proxy.
 //
-// URL resolution priority:
-//   1. SERVER_SELF_URL env var  — explicit OPS config; effective from boot.
-//   2. Auto-detected from first proxied request's x-forwarded-host header.
-//   3. localhost fallback        — local dev only; does NOT traverse the proxy.
+// Startup sequence:
+//   1. SERVER_SELF_URL set   → ping the external URL immediately from boot.
+//   2. SERVER_SELF_URL unset → ping localhost on boot (keeps the process warm);
+//      switch to the real external URL on the first proxied request whose
+//      x-forwarded-host header reveals the pod's public address.
+//
+// _startKeepAlive always clears any running timer before starting the new one
+// so the localhost → external transition is atomic and race-free.
 //
 // Set KEEP_ALIVE_INTERVAL_MS=0 to disable.
 const _keepAliveMs = parseInt(process.env.KEEP_ALIVE_INTERVAL_MS || '50000', 10);
-let _selfUrl = process.env.SERVER_SELF_URL || null;
-let _keepAliveStarted = false;
+let _keepAliveTimer = null;
+let _keepAliveUrl = null;
 
 function _startKeepAlive(baseUrl) {
-  if (_keepAliveStarted || _keepAliveMs <= 0) return;
-  if (_keepAliveStarted || _keepAliveMs <= 0) return;
-  _keepAliveStarted = true;
+  if (_keepAliveMs <= 0) return;
   const pingUrl = `${baseUrl.replace(/\/$/, '')}/rooms`;
+  if (pingUrl === _keepAliveUrl) return;
+  if (_keepAliveTimer) {
+    clearInterval(_keepAliveTimer);
+    _keepAliveTimer = null;
+  }
+  _keepAliveUrl = pingUrl;
   const client = pingUrl.startsWith('https') ? https : http;
   console.log(`Keep-alive: pinging ${pingUrl} every ${_keepAliveMs}ms`);
-  setInterval(() => {
+  _keepAliveTimer = setInterval(() => {
     client.get(pingUrl, (res) => { res.resume(); }).on('error', () => {});
   }, _keepAliveMs);
 }
@@ -46,21 +54,19 @@ function _startKeepAlive(baseUrl) {
 app.use(cors({ origin: FRONTEND_ORIGIN }));
 app.use(express.json());
 
-// If SERVER_SELF_URL was set at boot, start the keep-alive immediately
-// (no need to wait for the first request).
-if (_selfUrl) _startKeepAlive(_selfUrl);
-
-// Capture the pod's public URL from the first proxied request's Host header so
-// the keep-alive can start even when SERVER_SELF_URL was not set by OPS.
+// Switch the keep-alive from the localhost warm-up timer to the real external
+// URL on the first proxied request.  Uses x-forwarded-host (set by Alphinium's
+// proxy) to detect the pod's public address.  Only switches once — subsequent
+// requests from the same host are no-ops.
 app.use((req, _res, next) => {
-  if (!_selfUrl && _keepAliveMs > 0) {
+  if (_keepAliveMs > 0) {
     const host = req.headers['x-forwarded-host'] || req.headers.host || '';
     const isLoopback = !host || host.startsWith('localhost') || host.startsWith('127.');
-    if (!isLoopback) {
+    if (!isLoopback && _keepAliveUrl && _keepAliveUrl.includes('localhost')) {
       const proto = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
-      _selfUrl = `${proto}://${host}`;
-      console.log(`Keep-alive: auto-detected self URL: ${_selfUrl}`);
-      _startKeepAlive(_selfUrl);
+      const externalUrl = `${proto}://${host}`;
+      console.log(`Keep-alive: switching to auto-detected URL: ${externalUrl}`);
+      _startKeepAlive(externalUrl);
     }
   }
   next();
@@ -80,6 +86,12 @@ registerGameHandlers(wss);
 if (require.main === module) {
   server.listen(PORT, () => {
     console.log(`Bingo Night server listening on port ${PORT}`);
+    // Start keep-alive immediately.  SERVER_SELF_URL is the preferred source;
+    // without it we fall back to localhost so the timer infrastructure is ready
+    // and the middleware can atomically switch to the real external URL on the
+    // first proxied request (clearing the localhost timer via clearInterval).
+    const selfUrl = process.env.SERVER_SELF_URL || `http://localhost:${PORT}`;
+    _startKeepAlive(selfUrl);
   });
 }
 
