@@ -34,3 +34,5 @@ pods:
     env_vars:
       - name: FRONTEND_ORIGIN
         description: "CORS allowed origin — set to the app pod URL (e.g. https://...-preview-N-XXXX.user-pods.alphinium.io). Leave blank to allow all origins."
+      - name: SERVER_SELF_URL
+        description: "This pod's own public URL (e.g. https://...-server.user-pods.alphinium.io). Used by the self-ping keep-alive so the pod stays alive from boot. If not set, the URL is auto-detected from the first incoming request — optional but recommended."
