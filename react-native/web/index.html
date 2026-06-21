@@ -21,6 +21,14 @@
         min-height: 100vh;
       }
     </style>
+    <!-- Google Analytics — marketplace.alphinium.com (default, override via EXPO_PUBLIC_GA_ID) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=%EXPO_PUBLIC_GA_ID%"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '%EXPO_PUBLIC_GA_ID%');
+    </script>
   </head>
   <body>
     <noscript>
