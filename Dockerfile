@@ -3,6 +3,8 @@ WORKDIR /app
 COPY react-native/package*.json ./
 RUN npm install --legacy-peer-deps
 COPY react-native/ .
+ARG EXPO_PUBLIC_WS_HOST=localhost:3001
+ENV EXPO_PUBLIC_WS_HOST=$EXPO_PUBLIC_WS_HOST
 RUN npx expo export --platform web --output-dir dist
 
 FROM nginx:alpine
