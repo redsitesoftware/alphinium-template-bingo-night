@@ -1,5 +1,7 @@
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
+const { WebSocketServer } = require('ws');
 const { createRoom, getRoom, joinRoom } = require('./rooms');
 
 const app = express();
@@ -45,6 +47,18 @@ app.post('/rooms/:code/join', (req, res) => {
   res.json(room);
 });
 
-app.listen(PORT, () => {
+// ── HTTP + WebSocket server ───────────────────────────────────────────────────
+
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+
+wss.on('connection', (ws) => {
+  // Game event handlers will attach room-specific logic here in future issues.
+  ws.on('error', (err) => console.error('WebSocket error:', err));
+});
+
+server.listen(PORT, () => {
   console.log(`Bingo Night server listening on port ${PORT}`);
 });
+
+module.exports = { app, server, wss };
