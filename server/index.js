@@ -9,8 +9,29 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'http://localhost:8081';
 
+// Auto-detect the pod's external base URL from the first proxied request.
+// Used by the keep-alive when SERVER_SELF_URL is not explicitly set.
+let _detectedSelfUrl = null;
+
 app.use(cors({ origin: FRONTEND_ORIGIN }));
 app.use(express.json());
+
+// Capture the external URL from the first request that comes through the proxy.
+app.use((req, _res, next) => {
+  if (!_detectedSelfUrl && !process.env.SERVER_SELF_URL) {
+    const host = req.get('x-forwarded-host') || req.get('host');
+    const proto = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
+    // Only detect if this looks like an external hostname (not a loopback address).
+    const hostname = host ? host.split(':')[0] : '';
+    const isLoopback = !hostname || hostname === 'localhost' || hostname === '127.0.0.1'
+      || hostname === '::1' || hostname === '0.0.0.0';
+    if (!isLoopback) {
+      _detectedSelfUrl = `${proto}://${host}`;
+      console.log(`Keep-alive: auto-detected external URL: ${_detectedSelfUrl}`);
+    }
+  }
+  next();
+});
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -34,29 +55,29 @@ if (require.main === module) {
     // proxy-level idle timeout.  We must hit the pod's public external URL on a real
     // application route (GET /rooms) so the request actually traverses the proxy.
     //
-    // Set SERVER_SELF_URL to the pod's public base URL (e.g.
-    // https://...-server.user-pods.alphinium.io) via .alphinium/config.yaml env_vars.
-    // If not set, falls back to localhost (useful for local dev where there is no proxy).
+    // Priority for the base URL used by the keep-alive:
+    //   1. SERVER_SELF_URL env var (explicit OPS config, always preferred)
+    //   2. Auto-detected from the first proxied request's Host header
+    //   3. localhost fallback (local dev only — does NOT traverse the proxy)
     //
     // Set KEEP_ALIVE_INTERVAL_MS to 0 to disable.
     const keepAliveMs = parseInt(process.env.KEEP_ALIVE_INTERVAL_MS || '50000', 10);
     if (keepAliveMs > 0) {
-      const selfUrl = process.env.SERVER_SELF_URL;
-      if (selfUrl) {
-        // External ping through the proxy on a real application route.
-        const https = require('https');
-        const pingUrl = `${selfUrl.replace(/\/$/, '')}/rooms`;
-        setInterval(() => {
-          const client = pingUrl.startsWith('https') ? https : http;
-          client.get(pingUrl, (res) => { res.resume(); }).on('error', () => {});
-        }, keepAliveMs);
+      const https = require('https');
+      setInterval(() => {
+        const selfUrl = process.env.SERVER_SELF_URL || _detectedSelfUrl;
+        const pingUrl = selfUrl
+          ? `${selfUrl.replace(/\/$/, '')}/rooms`
+          : `http://localhost:${PORT}/rooms`;
+        const client = pingUrl.startsWith('https') ? https : http;
+        client.get(pingUrl, (res) => { res.resume(); }).on('error', () => {});
+      }, keepAliveMs);
+
+      if (process.env.SERVER_SELF_URL) {
+        const pingUrl = `${process.env.SERVER_SELF_URL.replace(/\/$/, '')}/rooms`;
         console.log(`Keep-alive: pinging ${pingUrl} every ${keepAliveMs}ms`);
       } else {
-        // Fallback for local dev: ping localhost directly.
-        setInterval(() => {
-          http.get(`http://localhost:${PORT}/rooms`, (res) => { res.resume(); }).on('error', () => {});
-        }, keepAliveMs);
-        console.log(`Keep-alive: pinging localhost:${PORT}/rooms every ${keepAliveMs}ms (set SERVER_SELF_URL for proxy-aware pinging)`);
+        console.log(`Keep-alive: will auto-detect external URL from first proxied request (fallback: localhost:${PORT}/rooms), interval ${keepAliveMs}ms`);
       }
     }
   });
