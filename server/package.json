@@ -1,7 +1,7 @@
 {
   "name": "bingo-night-server",
   "version": "1.0.0",
-  "description": "Bingo Night — backend server for room management",
+  "description": "Express server for Bingo Night room management",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

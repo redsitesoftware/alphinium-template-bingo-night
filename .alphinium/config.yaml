@@ -20,6 +20,7 @@ pods:
         description: "Enabled OAuth providers (e.g. google,email). Defaults to google,email"
       - name: EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY
         description: "Stripe publishable key for payment features (optional)"
+
   - name: server
     dockerfile: server/Dockerfile
     build_context: server
