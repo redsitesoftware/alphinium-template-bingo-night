@@ -31,3 +31,8 @@ pods:
       path: /health
       interval_seconds: 30
       timeout_seconds: 10
+    env_vars:
+      - name: SERVER_SELF_URL
+        description: "Public base URL of this server pod (e.g. https://...-server.user-pods.alphinium.io). Used by the keep-alive ping to traverse the proxy on a real application route and prevent pod expiry."
+      - name: KEEP_ALIVE_INTERVAL_MS
+        description: "Keep-alive ping interval in milliseconds (default: 50000). Set to 0 to disable."
