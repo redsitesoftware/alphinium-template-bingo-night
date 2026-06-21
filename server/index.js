@@ -1,6 +1,9 @@
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
+const { WebSocketServer } = require('ws');
 const { createRoom, getRoom, joinRoom } = require('./rooms');
+const { registerGameHandlers } = require('./game');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -45,6 +48,11 @@ app.post('/rooms/:code/join', (req, res) => {
   res.json(room);
 });
 
-app.listen(PORT, () => {
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+
+registerGameHandlers(wss);
+
+server.listen(PORT, () => {
   console.log(`Bingo Night server listening on port ${PORT}`);
 });
