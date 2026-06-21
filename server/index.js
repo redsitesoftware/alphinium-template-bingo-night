@@ -83,15 +83,21 @@ app.get('/health', (_req, res) => {
 // proxy-level idle timeout.  We must hit the pod's public external URL on a real
 // application route (GET /rooms) so the request actually traverses the proxy.
 //
-// SERVER_SELF_URL can be set explicitly via .alphinium/config.yaml env_vars.
-// If not set, the server auto-discovers its public URL from the Host header of the
-// first non-localhost request it receives.  This means the keep-alive becomes
-// proxy-aware automatically after the first real external request, with no manual
-// OPS intervention required.
+// Priority for resolving the base URL used by the keep-alive:
+//   1. SERVER_SELF_URL env var — explicit OPS config, starts working immediately on boot.
+//   2. EXPO_PUBLIC_ROOM_API_URL env var — OPS sets this on the app pod; if also declared
+//      on the server pod it gives us the same URL without a second variable to manage.
+//   3. Auto-detected from the first proxied request's x-forwarded-host header.
+//   4. localhost fallback — local dev only; does NOT traverse the proxy.
+//
+// For Alphinium preview/prod deployments, set SERVER_SELF_URL or EXPO_PUBLIC_ROOM_API_URL
+// (both declared in .alphinium/config.yaml) so the keep-alive is proxy-aware from boot.
+// Without either, the server falls back to localhost until the first external request
+// arrives, which may allow the proxy idle timer to expire before UAT runs.
 //
 // Set KEEP_ALIVE_INTERVAL_MS to 0 to disable.
 
-let _resolvedSelfUrl = process.env.SERVER_SELF_URL || null;
+let _resolvedSelfUrl = process.env.SERVER_SELF_URL || process.env.EXPO_PUBLIC_ROOM_API_URL || null;
 let _keepAliveTimer = null;
 const _keepAliveMs = parseInt(process.env.KEEP_ALIVE_INTERVAL_MS || '50000', 10);
 
@@ -145,7 +151,7 @@ if (require.main === module) {
       _keepAliveTimer = setInterval(() => {
         http.get(`http://localhost:${PORT}/rooms`, (res) => { res.resume(); }).on('error', () => {});
       }, _keepAliveMs);
-      console.log(`Keep-alive: pinging localhost:${PORT}/rooms every ${_keepAliveMs}ms (will switch to external URL on first external request)`);
+      console.log(`Keep-alive: no SERVER_SELF_URL or EXPO_PUBLIC_ROOM_API_URL set — pinging localhost:${PORT}/rooms every ${_keepAliveMs}ms (will switch to external URL on first external request)`);
     }
   });
 }
