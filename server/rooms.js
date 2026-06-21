@@ -1,7 +1,7 @@
 const { customAlphabet } = require('nanoid');
 
 const CODE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-const generateCode = customAlphabet(CODE_ALPHABET, 6);
+const _rawCode = customAlphabet(CODE_ALPHABET, 6);
 
 /** @type {Map<string, object>} */
 const rooms = new Map();
@@ -10,10 +10,10 @@ const rooms = new Map();
  * Generate a unique 6-char alphanumeric room code (A-Z0-9).
  * Retries on collision.
  */
-function createUniqueCode() {
+function generateCode() {
   let code;
   do {
-    code = generateCode();
+    code = _rawCode();
   } while (rooms.has(code));
   return code;
 }
@@ -25,7 +25,7 @@ function createUniqueCode() {
  * @returns {object} The created room
  */
 function createRoom(hostName, themeId) {
-  const code = createUniqueCode();
+  const code = generateCode();
   const now = new Date();
   const room = {
     code,
@@ -83,4 +83,4 @@ function pruneExpiredRooms() {
 // Run expiry cleanup every 5 minutes
 setInterval(pruneExpiredRooms, 5 * 60 * 1000);
 
-module.exports = { rooms, createRoom, getRoom, joinRoom };
+module.exports = { rooms, generateCode, createRoom, getRoom, joinRoom, pruneExpiredRooms };
