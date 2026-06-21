@@ -5,6 +5,8 @@
 import { create } from 'zustand';
 
 const SERVER_HOST = process.env.EXPO_PUBLIC_WS_HOST || 'localhost:3001';
+// Use secure WebSocket for non-localhost hosts (deployed pods run behind HTTPS)
+const WS_PROTOCOL = SERVER_HOST.startsWith('localhost') || SERVER_HOST.startsWith('127.') ? 'ws' : 'wss';
 
 // --- Themed bingo call sets ---
 export const THEMES = [
@@ -191,7 +193,7 @@ export const useBingoStore = create((set, get) => ({
       existing.close();
     }
 
-    const ws = new WebSocket(`ws://${SERVER_HOST}/`);
+    const ws = new WebSocket(`${WS_PROTOCOL}://${SERVER_HOST}/`);
 
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: 'join-room', payload: { code, playerName } }));
