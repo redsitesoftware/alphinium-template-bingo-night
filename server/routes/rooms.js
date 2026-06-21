@@ -1,7 +1,12 @@
 const express = require('express');
-const { createRoom, getRoom, touchRoom } = require('../rooms');
+const { createRoom, getRoom, touchRoom, rooms } = require('../rooms');
 
 const router = express.Router();
+
+// GET /rooms — lightweight status/keep-alive endpoint
+router.get('/', (_req, res) => {
+  res.json({ activeRooms: rooms.size });
+});
 
 // POST /rooms — create a new room
 router.post('/', (req, res) => {
