@@ -21,18 +21,4 @@ pods:
       - name: EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY
         description: "Stripe publishable key for payment features (optional)"
       - name: EXPO_PUBLIC_ROOM_API_URL
-        description: "Room API server URL (e.g. https://server.myapp.pods.alphinium.io)"
-
-  - name: server
-    dockerfile: server/Dockerfile
-    build_context: server
-    port: 3001
-    health_check:
-      path: /health
-      interval_seconds: 30
-      timeout_seconds: 10
-    env_vars:
-      - name: SERVER_SELF_URL
-        description: "Public base URL of this server pod (e.g. https://...-server.user-pods.alphinium.io). Used by the keep-alive ping to traverse the proxy on a real application route and prevent pod expiry."
-      - name: KEEP_ALIVE_INTERVAL_MS
-        description: "Keep-alive ping interval in milliseconds (default: 50000). Set to 0 to disable."
+        description: "Room API base URL. Leave blank (recommended): nginx proxies /rooms to the built-in Node.js server running in the same pod, so no separate server URL is needed."
