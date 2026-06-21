@@ -1,8 +1,10 @@
 /**
  * bingoStore.js — Bingo Night game state
- * Zustand store. Full 5x5 bingo card, AI caller simulation, dauber marking.
+ * Zustand store. Full 5x5 bingo card, WebSocket caller, dauber marking.
  */
 import { create } from 'zustand';
+
+const SERVER_HOST = process.env.EXPO_PUBLIC_WS_HOST || 'localhost:3001';
 
 // --- Themed bingo call sets ---
 export const THEMES = [
@@ -128,6 +130,10 @@ export const useBingoStore = create((set, get) => ({
   isCalling: false,
   callInterval: null,
 
+  // WebSocket
+  ws: null,
+  wsConnected: false,
+
   // Actions
   setTheme: (themeId) => set({ themeId }),
   setDauber: (color) => set({ dauberColor: color }),
@@ -154,6 +160,7 @@ export const useBingoStore = create((set, get) => ({
       callQueue: pool,
       isCalling: false,
     });
+    get().connectWS(code, name);
   },
 
   joinAsPlayer: (code, name, themeId) => {
@@ -170,6 +177,85 @@ export const useBingoStore = create((set, get) => ({
       calledItems: [],
       callQueue: [],
     });
+    get().connectWS(code.toUpperCase(), name);
+  },
+
+  // WebSocket actions
+  connectWS: (code, playerName) => {
+    const { ws: existing } = get();
+    if (existing) {
+      existing.onopen = null;
+      existing.onmessage = null;
+      existing.onclose = null;
+      existing.onerror = null;
+      existing.close();
+    }
+
+    const ws = new WebSocket(`ws://${SERVER_HOST}/`);
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'join-room', payload: { code, playerName } }));
+      set({ wsConnected: true });
+    };
+
+    ws.onmessage = (event) => {
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      switch (msg.type) {
+        case 'room-state':
+          set({
+            calledItems: msg.calledItems ?? [],
+            callQueue: msg.callQueue ?? [],
+          });
+          break;
+
+        case 'number-called':
+          set({
+            calledItems: msg.calledItems ?? [...get().calledItems, msg.item],
+            callQueue: Array(msg.callQueueLength ?? 0).fill(null),
+          });
+          break;
+
+        case 'game-ended':
+          set({
+            phase: 'ended',
+            calledItems: msg.calledItems ?? get().calledItems,
+            callQueue: [],
+            isCalling: false,
+          });
+          break;
+
+        default:
+          break;
+      }
+    };
+
+    ws.onclose = () => {
+      set({ wsConnected: false });
+    };
+
+    ws.onerror = () => {
+      set({ wsConnected: false });
+    };
+
+    set({ ws });
+  },
+
+  disconnectWS: () => {
+    const { ws } = get();
+    if (ws) {
+      ws.onopen = null;
+      ws.onmessage = null;
+      ws.onclose = null;
+      ws.onerror = null;
+      ws.close();
+    }
+    set({ ws: null, wsConnected: false });
   },
 
   // Daub a square
@@ -216,14 +302,17 @@ export const useBingoStore = create((set, get) => ({
 
   continueAfterWin: () => set({ phase: 'calling' }),
 
-  resetGame: () => set({
-    phase: 'home',
-    card: [],
-    marked: new Set(),
-    wins: [],
-    calledItems: [],
-    callQueue: [],
-    isCalling: false,
-    sessionCode: '',
-  }),
+  resetGame: () => {
+    get().disconnectWS();
+    set({
+      phase: 'home',
+      card: [],
+      marked: new Set(),
+      wins: [],
+      calledItems: [],
+      callQueue: [],
+      isCalling: false,
+      sessionCode: '',
+    });
+  },
 }));

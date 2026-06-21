@@ -90,8 +90,9 @@ function BingoSquare({ item, index, isMarked, isLatest, dauberColor, onPress }) 
 
 export default function CardScreen() {
   const {
-    card, marked, dauberColor, calledItems, callNext, isHost,
+    card, marked, dauberColor, calledItems, isHost,
     sessionCode, playerName, themeId, isCalling, startAutoCalling, stopAutoCalling, resetGame,
+    ws,
   } = useBingoStore();
 
   const [currentCall, setCurrentCall] = useState('');
@@ -100,30 +101,31 @@ export default function CardScreen() {
   const daubeSquare = useBingoStore(s => s.daubeSquare);
   const wins = useBingoStore(s => s.wins);
 
-  // Auto-calling ticker
+  // Update current call display when calledItems changes (driven by WS)
   useEffect(() => {
-    if (!isHost || !isCalling) return;
-    const t = setInterval(() => {
-      const next = callNext();
-      if (!next) {
-        stopAutoCalling();
-        return;
-      }
-      setCurrentCall(next);
-      const quips = HOST_QUIPS[themeId] || HOST_QUIPS.classic;
-      setQuip(quips[quipIndex % quips.length]);
-      setQuipIndex(i => i + 1);
-    }, 4000);
-    return () => clearInterval(t);
-  }, [isCalling, quipIndex, themeId]);
-
-  const handleManualCall = () => {
-    const next = callNext();
-    if (!next) return;
-    setCurrentCall(next);
+    if (calledItems.length === 0) return;
+    const latest = calledItems[calledItems.length - 1];
+    setCurrentCall(latest);
     const quips = HOST_QUIPS[themeId] || HOST_QUIPS.classic;
     setQuip(quips[quipIndex % quips.length]);
     setQuipIndex(i => i + 1);
+  }, [calledItems.length]);
+
+  // Auto-calling: tell the server to start/stop
+  const handleAutoCallerToggle = () => {
+    if (!ws) return;
+    if (isCalling) {
+      ws.send(JSON.stringify({ type: 'stop-auto-caller', payload: { code: sessionCode } }));
+      stopAutoCalling();
+    } else {
+      ws.send(JSON.stringify({ type: 'start-auto-caller', payload: { code: sessionCode, interval: 4 } }));
+      startAutoCalling();
+    }
+  };
+
+  const handleManualCall = () => {
+    if (!ws) return;
+    ws.send(JSON.stringify({ type: 'call-number', payload: { code: sessionCode } }));
   };
 
   const latestCalledItem = calledItems[calledItems.length - 1];
@@ -201,12 +203,12 @@ export default function CardScreen() {
         {/* Host controls */}
         {isHost && (
           <View style={s.controls}>
-            <TouchableOpacity style={s.callBtn} onPress={handleManualCall} disabled={isCalling}>
+            <TouchableOpacity style={s.callBtn} onPress={handleManualCall} disabled={isCalling || !ws}>
               <Text style={s.callBtnText}>Call Next</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.autoBtn, isCalling && s.autoBtnActive]}
-              onPress={isCalling ? stopAutoCalling : startAutoCalling}>
+              onPress={handleAutoCallerToggle}>
               <Text style={s.autoBtnText}>{isCalling ? '⏸ Pause Auto' : '▶ Auto Call'}</Text>
             </TouchableOpacity>
           </View>
