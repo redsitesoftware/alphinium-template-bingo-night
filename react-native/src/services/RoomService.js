@@ -6,7 +6,15 @@ export const RoomService = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ hostName, themeId }),
-    }).then(r => r.json()),
+    }).then(async r => {
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        const error = new Error(err.message || `Request failed with status ${r.status}`);
+        error.status = r.status;
+        throw error;
+      }
+      return r.json();
+    }),
 
   joinRoom: (code, playerName) =>
     fetch(`${ROOM_API_URL}/rooms/${code}/join`, {
@@ -24,7 +32,13 @@ export const RoomService = {
     }),
 
   getRoom: (code) =>
-    fetch(`${ROOM_API_URL}/rooms/${code}`).then(r => {
+    fetch(`${ROOM_API_URL}/rooms/${code}`).then(async r => {
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        const error = new Error(err.message || `Request failed with status ${r.status}`);
+        error.status = r.status;
+        throw error;
+      }
       return r.json();
     }),
 };
