@@ -20,6 +20,8 @@ pods:
         description: "Enabled OAuth providers (e.g. google,email). Defaults to google,email"
       - name: EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY
         description: "Stripe publishable key for payment features (optional)"
+      - name: EXPO_PUBLIC_ROOM_API_URL
+        description: "Room API server URL (e.g. https://server.myapp.pods.alphinium.io)"
 
   - name: server
     dockerfile: server/Dockerfile
