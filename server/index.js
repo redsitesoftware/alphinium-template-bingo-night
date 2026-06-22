@@ -4,7 +4,6 @@ const express = require('express');
 const cors = require('cors');
 const { WebSocketServer } = require('ws');
 const roomsRouter = require('./routes/rooms');
-const gamesRouter = require('./routes/games');
 const themesRouter = require('./routes/themes');
 const { registerGameHandlers } = require('./game');
 
@@ -26,17 +25,16 @@ const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || '*';
 //   4. localhost fallback — local dev only; does NOT traverse the proxy.
 //
 // Set KEEP_ALIVE_INTERVAL_MS=0 to disable.
-
-let _resolvedSelfUrl = process.env.SERVER_SELF_URL || process.env.EXPO_PUBLIC_ROOM_API_URL || null;
-let _keepAliveTimer = null;
 const _keepAliveMs = parseInt(process.env.KEEP_ALIVE_INTERVAL_MS || '50000', 10);
+let _keepAliveTimer = null;
+let _resolvedSelfUrl = process.env.SERVER_SELF_URL || process.env.EXPO_PUBLIC_ROOM_API_URL || null;
 
 function startKeepAlive(baseUrl) {
   if (_keepAliveMs <= 0) return;
   if (_keepAliveTimer) { clearInterval(_keepAliveTimer); _keepAliveTimer = null; }
   const pingUrl = `${baseUrl.replace(/\/$/, '')}/rooms`;
+  const client = pingUrl.startsWith('https') ? https : http;
   _keepAliveTimer = setInterval(() => {
-    const client = pingUrl.startsWith('https') ? https : http;
     client.get(pingUrl, (res) => { res.resume(); }).on('error', () => {});
   }, _keepAliveMs);
   console.log(`Keep-alive: pinging ${pingUrl} every ${_keepAliveMs}ms`);
@@ -46,6 +44,7 @@ app.use(cors({ origin: FRONTEND_ORIGIN }));
 app.use(express.json());
 
 // Middleware: learn the pod's public URL from the first external request's Host header.
+// Only switches once — subsequent requests from the same host are no-ops.
 app.use((req, _res, next) => {
   if (!_resolvedSelfUrl && _keepAliveMs > 0) {
     const host = req.headers['x-forwarded-host'] || req.headers.host || '';
@@ -64,7 +63,6 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/rooms', roomsRouter);
-app.use('/games', gamesRouter);
 app.use('/themes', themesRouter);
 
 const server = http.createServer(app);
@@ -81,6 +79,7 @@ if (require.main === module) {
     if (_resolvedSelfUrl) {
       startKeepAlive(_resolvedSelfUrl);
     } else {
+      // No explicit URL — fall back to localhost until a real external request arrives.
       _keepAliveTimer = setInterval(() => {
         http.get(`http://localhost:${PORT}/rooms`, (res) => { res.resume(); }).on('error', () => {});
       }, _keepAliveMs);

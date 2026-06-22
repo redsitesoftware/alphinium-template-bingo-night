@@ -183,17 +183,14 @@ registerTheme({
   ],
 });
 
-registerTheme({
-  id: 'emoji',
-  name: 'Emoji Bingo',
-  calls: [
-    '🎉', '🔥', '💡', '🎯', '🚀',
-    '⭐', '🌈', '🎸', '🍕', '🐉',
-    '🦄', '🌊', '⚡', '🎩', '🍀',
-    '🏆', '💎', '🎲', '🌸', '🦋',
-    '🍩', '🎺', '🔮', '🌙', '🐬',
-    '🎪', '🦁', '🍭', '🌋', '🐙',
-  ],
-});
+/**
+ * List all registered themes (id, name, emoji — no calls array).
+ * @returns {{ id: string, name: string, emoji?: string }[]}
+ */
+function listThemes() {
+  return Array.from(themeRegistry.values()).map(({ id, name, emoji }) =>
+    emoji !== undefined ? { id, name, emoji } : { id, name }
+  );
+}
 
-module.exports = { getTheme, registerTheme, themeRegistry };
+module.exports = { getTheme, registerTheme, listThemes, themeRegistry };
