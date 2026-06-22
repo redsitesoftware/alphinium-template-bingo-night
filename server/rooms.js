@@ -268,9 +268,39 @@ function touchRoom(room) {
 function joinRoom(code, playerName) {
   const room = rooms.get(code);
   if (!room) return null;
-  room.players.push({ name: playerName, joinedAt: new Date() });
+  room.players.push({ name: playerName, card: null, joinedAt: new Date() });
   room.lastActivityAt = new Date();
   return room;
+}
+
+/**
+ * Persist a player's bingo card (25-element string array) against their entry.
+ * @param {string} code  Room code
+ * @param {string} name  Player name
+ * @param {string[]} card  Flat 25-element array
+ * @returns {boolean} true if saved, false if room/player not found
+ */
+function savePlayerCard(code, name, card) {
+  const room = rooms.get(code);
+  if (!room) return false;
+  const player = room.players.find(p => p.name === name);
+  if (!player) return false;
+  player.card = card;
+  room.lastActivityAt = new Date();
+  return true;
+}
+
+/**
+ * Retrieve a player's stored bingo card.
+ * @param {string} code  Room code
+ * @param {string} name  Player name
+ * @returns {string[]|null} The card array, or null if not found/unset
+ */
+function getPlayerCard(code, name) {
+  const room = rooms.get(code);
+  if (!room) return null;
+  const player = room.players.find(p => p.name === name);
+  return player?.card ?? null;
 }
 
 /**
@@ -358,6 +388,8 @@ module.exports = {
   getRoom,
   touchRoom,
   joinRoom,
+  savePlayerCard,
+  getPlayerCard,
   nextCall,
   getRoomState,
   addClient,
