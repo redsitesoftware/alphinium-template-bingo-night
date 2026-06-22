@@ -1,5 +1,5 @@
 const express = require('express');
-const { createRoom, getRoom, touchRoom, rooms } = require('../rooms');
+const { createRoom, getRoom, touchRoom, rooms, generateCard } = require('../rooms');
 
 const router = express.Router();
 
@@ -42,6 +42,28 @@ router.post('/:code/join', (req, res) => {
   touchRoom(room);
 
   return res.status(200).json(room);
+});
+
+// GET /rooms/:code/card — get or generate a bingo card for a player
+router.get('/:code/card', (req, res) => {
+  const code = req.params.code.toUpperCase();
+  const { playerName } = req.query;
+
+  if (!playerName) {
+    return res.status(400).json({ error: 'playerName is required' });
+  }
+
+  const room = getRoom(code);
+  if (!room) {
+    return res.status(404).json({ error: 'Room not found' });
+  }
+
+  const card = generateCard(code, playerName);
+  if (!card) {
+    return res.status(404).json({ error: 'Player not found in room' });
+  }
+
+  return res.status(200).json(card);
 });
 
 // GET /rooms/:code — get current room state

@@ -213,6 +213,44 @@ function removeClient(code, ws) {
 }
 
 /**
+ * Generate (or retrieve) a unique 5×5 bingo card for a player.
+ * Cards are stored on the player object; subsequent calls return the same card.
+ * Retries up to 100 times to produce a grid distinct from all other players in the room.
+ * @param {string} code Room code
+ * @param {string} playerName
+ * @returns {{ grid: string[][] }|null} null if room or player not found
+ */
+function generateCard(code, playerName) {
+  const room = rooms.get(code);
+  if (!room) return null;
+
+  const player = room.players.find((p) => p.name === playerName);
+  if (!player) return null;
+
+  if (player.card) return player.card;
+
+  const pool = CALLS_BY_THEME[room.themeId] || CALLS_BY_THEME.office;
+
+  const existingKeys = new Set(
+    room.players
+      .filter((p) => p.card)
+      .map((p) => p.card.grid.flat().join('|'))
+  );
+
+  let grid;
+  let attempts = 0;
+  do {
+    const picks = shuffle(pool).slice(0, 25);
+    grid = [picks.slice(0, 5), picks.slice(5, 10), picks.slice(10, 15), picks.slice(15, 20), picks.slice(20, 25)];
+    attempts += 1;
+  } while (existingKeys.has(grid.flat().join('|')) && attempts < 100);
+
+  player.card = { grid };
+  room.lastActivityAt = new Date();
+  return player.card;
+}
+
+/**
  * Broadcast a JSON payload to all OPEN clients in the room.
  * @param {string} code
  * @param {object} payload
@@ -252,6 +290,7 @@ module.exports = {
   touchRoom,
   joinRoom,
   nextCall,
+  generateCard,
   getRoomState,
   addClient,
   removeClient,
