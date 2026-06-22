@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const { WebSocketServer } = require('ws');
 const roomsRouter = require('./routes/rooms');
+const gamesRouter = require('./routes/games');
 const audioRouter = require('./routes/audio');
 const { registerGameHandlers } = require('./game');
 
@@ -75,6 +76,7 @@ app.use((req, _res, next) => {
 });
 
 app.use('/rooms', roomsRouter);
+app.use('/games', gamesRouter);
 app.use('/audio', audioRouter);
 
 const server = http.createServer(app);

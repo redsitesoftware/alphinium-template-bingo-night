@@ -6,6 +6,7 @@
  */
 
 const { getRoom, addClient, removeClient, broadcastToRoom, nextCall, getRoomState } = require('./rooms');
+const { saveGame } = require('./gameHistory');
 
 /** @type {Map<string, ReturnType<typeof setInterval>>} */
 const autoCallers = new Map();
@@ -31,6 +32,14 @@ function callNumber(code) {
   if (room.callQueue.length === 0) {
     broadcastToRoom(code, { type: 'game-ended', calledItems: room.calledItems });
     stopAutoCallerForRoom(code);
+    saveGame({
+      code,
+      players: room.players.map(p => p.name),
+      calledItems: room.calledItems,
+      winners: room.winners || [],
+      startedAt: room.createdAt,
+      endedAt: new Date(),
+    });
   }
 }
 
