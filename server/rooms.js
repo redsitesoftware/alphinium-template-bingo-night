@@ -244,6 +244,18 @@ function pruneExpiredRooms() {
 // Run expiry cleanup every 5 minutes
 setInterval(pruneExpiredRooms, 5 * 60 * 1000);
 
+/**
+ * Find a player entry in a room by name.
+ * @param {string} code
+ * @param {string} playerName
+ * @returns {object|null}
+ */
+function getPlayer(code, playerName) {
+  const room = rooms.get(code);
+  if (!room) return null;
+  return room.players.find(p => p.name === playerName) || null;
+}
+
 module.exports = {
   rooms,
   generateCode,
@@ -257,4 +269,5 @@ module.exports = {
   removeClient,
   broadcastToRoom,
   pruneExpiredRooms,
+  getPlayer,
 };
