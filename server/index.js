@@ -99,8 +99,6 @@ app.get('/health', (_req, res) => {
 // Set KEEP_ALIVE_INTERVAL_MS to 0 to disable.
 
 let _resolvedSelfUrl = process.env.SERVER_SELF_URL || process.env.EXPO_PUBLIC_ROOM_API_URL || null;
-let _keepAliveTimer = null;
-const _keepAliveMs = parseInt(process.env.KEEP_ALIVE_INTERVAL_MS || '50000', 10);
 
 function startKeepAlive(baseUrl) {
   if (_keepAliveMs <= 0) return;
