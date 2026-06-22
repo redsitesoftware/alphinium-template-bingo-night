@@ -5,7 +5,7 @@
  * Called from index.js after the WebSocket server is created.
  */
 
-const { getRoom, addClient, removeClient, broadcastToRoom, nextCall, getRoomState } = require('./rooms');
+const { getRoom, addClient, removeClient, broadcastToRoom, nextCall, getRoomState, savePlayerCard, getPlayerCard } = require('./rooms');
 
 /** @type {Map<string, ReturnType<typeof setInterval>>} */
 const autoCallers = new Map();
@@ -83,11 +83,37 @@ function registerGameHandlers(wss) {
           addClient(code, ws);
 
           // Register player if not already present (host joins without a players entry)
-          if (name && name !== room.hostName && !room.players.find(p => p.name === name)) {
-            room.players.push({ name, joinedAt: new Date() });
+          const existingPlayer = name && name !== room.hostName
+            ? room.players.find(p => p.name === name)
+            : null;
+
+          if (name && name !== room.hostName && !existingPlayer) {
+            room.players.push({ name, card: null, joinedAt: new Date() });
           }
 
           broadcastToRoom(code, { type: 'room-state', ...getRoomState(code) });
+
+          // If rejoining player has a stored card, send it back to them only
+          const storedCard = name ? getPlayerCard(code, name) : null;
+          if (storedCard) {
+            ws.send(JSON.stringify({ type: 'player-card-restore', playerCard: storedCard }));
+          }
+          break;
+        }
+
+        case 'save-card': {
+          const code = payload.code?.toUpperCase();
+          const card = payload.card;
+
+          if (!Array.isArray(card) || card.length !== 25) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Invalid card: must be a 25-element array' }));
+            return;
+          }
+
+          const saved = savePlayerCard(code, playerName, card);
+          if (!saved) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Could not save card — room or player not found' }));
+          }
           break;
         }
 
