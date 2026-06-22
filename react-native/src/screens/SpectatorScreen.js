@@ -12,7 +12,8 @@ import { useBingoStore } from '../store/bingoStore';
 import { colors, spacing, radius, typography } from '../theme';
 
 export default function SpectatorScreen() {
-  const { calledItems, wins, sessionCode, resetGame } = useBingoStore();
+  const { calledItems, wins, sessionCode, resetGame, audioMuted } = useBingoStore();
+  const toggleAudioMuted = useBingoStore(s => s.toggleAudioMuted);
   const scrollRef = useRef(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -45,9 +46,14 @@ export default function SpectatorScreen() {
             <Text style={s.spectatorBadge}>👁️ SPECTATOR</Text>
             <Text style={s.roomCode}>Room: {sessionCode}</Text>
           </View>
-          <View style={s.callCount}>
-            <Text style={s.callCountNum}>{calledItems.length}</Text>
-            <Text style={s.callCountLabel}>called</Text>
+          <View style={s.headerRight}>
+            <TouchableOpacity onPress={toggleAudioMuted} style={s.muteBtn} accessibilityLabel={audioMuted ? 'Unmute audio' : 'Mute audio'}>
+              <Text style={s.muteBtnText}>{audioMuted ? '🔇' : '🔊'}</Text>
+            </TouchableOpacity>
+            <View style={s.callCount}>
+              <Text style={s.callCountNum}>{calledItems.length}</Text>
+              <Text style={s.callCountLabel}>called</Text>
+            </View>
           </View>
         </View>
 
@@ -142,6 +148,9 @@ const s = StyleSheet.create({
     textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: '700',
   },
   roomCode:         { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  headerRight:      { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  muteBtn:          { padding: 6 },
+  muteBtnText:      { fontSize: 22 },
   callCount:        {
     alignItems: 'center',
     backgroundColor: colors.card, borderRadius: radius.md,
