@@ -33,7 +33,8 @@ else
   ROOMS_UPSTREAM="http://127.0.0.1:3001"
   echo "Single-pod mode: starting embedded Node.js server on port 3001"
 
-  export PORT=3001\nnode \/server\/index.js &
+  export PORT=3001
+  node /server/index.js &
   NODE_PID=$!
 
   echo "Waiting for Node.js server to be ready..."
