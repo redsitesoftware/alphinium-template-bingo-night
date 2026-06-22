@@ -144,6 +144,7 @@ export const useBingoStore = create((set, get) => ({
   // WebSocket
   ws: null,
   wsConnected: false,
+  isReconnecting: false,
 
   // Actions
   setTheme: (themeId) => set({ themeId }),
@@ -208,6 +209,10 @@ export const useBingoStore = create((set, get) => ({
   },
 
   // WebSocket actions
+  _intentionalClose: false,
+  _reconnectDelay: 1000,
+  _reconnectTimer: null,
+
   connectWS: (code, playerName) => {
     const { ws: existing } = get();
     if (existing) {
@@ -222,8 +227,12 @@ export const useBingoStore = create((set, get) => ({
     const ws = new WebSocket(`${WS_PROTOCOL}://${SERVER_HOST}/rooms`);
 
     ws.onopen = () => {
+      const { card } = get();
+      set({ wsConnected: true, isReconnecting: false, _reconnectDelay: 1000 });
       ws.send(JSON.stringify({ type: 'join-room', payload: { code, playerName } }));
-      set({ wsConnected: true });
+      if (card && card.length > 0) {
+        ws.send(JSON.stringify({ type: 'save-card', payload: { code, playerName, card } }));
+      }
     };
 
     ws.onmessage = (event) => {
@@ -239,6 +248,8 @@ export const useBingoStore = create((set, get) => ({
           set({
             calledItems: msg.calledItems ?? [],
             callQueue: msg.callQueue ?? [],
+            // Restore card from server on reconnect path; keep local card otherwise
+            ...(msg.playerCard && msg.playerCard.length > 0 ? { card: msg.playerCard } : {}),
           });
           break;
 
@@ -265,17 +276,36 @@ export const useBingoStore = create((set, get) => ({
 
     ws.onclose = () => {
       set({ wsConnected: false });
+      if (get()._intentionalClose) return;
+
+      // Unexpected disconnect — schedule exponential backoff reconnect
+      const delay = get()._reconnectDelay;
+      set({ isReconnecting: true });
+      const timer = setTimeout(() => {
+        if (!get()._intentionalClose) {
+          const nextDelay = Math.min(delay * 2, 30000);
+          set({ _reconnectDelay: nextDelay, _reconnectTimer: null });
+          get().connectWS(code, playerName);
+        }
+      }, delay);
+      set({ _reconnectTimer: timer });
     };
 
     ws.onerror = () => {
       set({ wsConnected: false });
     };
 
-    set({ ws });
+    set({ ws, _intentionalClose: false });
   },
 
   disconnectWS: () => {
-    const { ws } = get();
+    const { ws, _reconnectTimer } = get();
+    // Signal onclose not to retry before closing
+    set({ _intentionalClose: true, isReconnecting: false });
+    if (_reconnectTimer) {
+      clearTimeout(_reconnectTimer);
+      set({ _reconnectTimer: null });
+    }
     if (ws) {
       ws.onopen = null;
       ws.onmessage = null;
