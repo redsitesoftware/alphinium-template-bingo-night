@@ -209,7 +209,7 @@ const s = StyleSheet.create({
   heroEmoji:      { fontSize: 60, marginBottom: spacing.md },
   heroTitle:      { ...typography.title, color: colors.primary, textAlign: 'center', marginBottom: spacing.sm },
   heroSub:        { ...typography.body, color: colors.textSub, textAlign: 'center', lineHeight: 24 },
-  features:       { marginBottom: spacing.xxl },
+  features:       { marginBottom: spacing.xxl, alignSelf: 'center' },
   featureRow:     { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
   featureEmoji:   { fontSize: 24, width: 36 },
   featureText:    { ...typography.body, color: colors.textSub, flex: 1 },
