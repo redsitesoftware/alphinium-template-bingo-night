@@ -140,6 +140,7 @@ export const useBingoStore = create((set, get) => ({
   callQueue: [],          // remaining items to call
   isCalling: false,
   callInterval: null,
+  callerInterval: 10,     // seconds between auto-calls (synced from server)
 
   // WebSocket
   ws: null,
@@ -239,7 +240,13 @@ export const useBingoStore = create((set, get) => ({
           set({
             calledItems: msg.calledItems ?? [],
             callQueue: msg.callQueue ?? [],
+            isCalling: msg.isCalling ?? get().isCalling,
+            callerInterval: msg.callerInterval ?? get().callerInterval,
           });
+          break;
+
+        case 'caller-state':
+          set({ isCalling: msg.isCalling, callerInterval: msg.callerInterval });
           break;
 
         case 'number-called':
