@@ -224,3 +224,261 @@ describe('GET /rooms/:code', () => {
     expect(res.body).toHaveProperty('error');
   });
 });
+
+// ---------------------------------------------------------------------------
+// POST /rooms — prize field (#61)
+// ---------------------------------------------------------------------------
+
+describe('POST /rooms — prize field', () => {
+  it('stores prize on room when provided', async () => {
+    const res = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Alice', themeId: 'classic', prize: '🏆 Bottle of wine' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.prize).toBe('🏆 Bottle of wine');
+  });
+
+  it('sets prize to null when omitted', async () => {
+    const res = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Bob', themeId: 'classic' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.prize).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /rooms/:code/card (#10)
+// ---------------------------------------------------------------------------
+
+describe('GET /rooms/:code/card', () => {
+  it('returns a 5×5 grid for a joined player', async () => {
+    const { body: created } = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Host', themeId: 'classic' });
+
+    await request(app)
+      .post(`/rooms/${created.code}/join`)
+      .send({ playerName: 'Alice' });
+
+    const res = await request(app)
+      .get(`/rooms/${created.code}/card?playerName=Alice`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.grid).toHaveLength(5);
+    res.body.grid.forEach(row => expect(row).toHaveLength(5));
+  });
+
+  it('is idempotent — returns same card on second call', async () => {
+    const { body: created } = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Host', themeId: 'classic' });
+
+    await request(app)
+      .post(`/rooms/${created.code}/join`)
+      .send({ playerName: 'Alice' });
+
+    const { body: first } = await request(app)
+      .get(`/rooms/${created.code}/card?playerName=Alice`);
+    const { body: second } = await request(app)
+      .get(`/rooms/${created.code}/card?playerName=Alice`);
+
+    expect(first.grid).toEqual(second.grid);
+  });
+
+  it('returns different cards for different players', async () => {
+    const { body: created } = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Host', themeId: 'classic' });
+
+    await request(app).post(`/rooms/${created.code}/join`).send({ playerName: 'Alice' });
+    await request(app).post(`/rooms/${created.code}/join`).send({ playerName: 'Bob' });
+
+    const { body: cardA } = await request(app)
+      .get(`/rooms/${created.code}/card?playerName=Alice`);
+    const { body: cardB } = await request(app)
+      .get(`/rooms/${created.code}/card?playerName=Bob`);
+
+    expect(cardA.grid).not.toEqual(cardB.grid);
+  });
+
+  it('returns 400 when playerName is missing', async () => {
+    const { body: created } = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Host', themeId: 'classic' });
+
+    const res = await request(app).get(`/rooms/${created.code}/card`);
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('returns 404 for unknown room', async () => {
+    const res = await request(app).get('/rooms/ZZZZZZ/card?playerName=Alice');
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('returns 404 for player not in room', async () => {
+    const { body: created } = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Host', themeId: 'classic' });
+
+    const res = await request(app)
+      .get(`/rooms/${created.code}/card?playerName=Nobody`);
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty('error');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /rooms/:code/claim (#11 + #64 — win validation + winner-announced)
+// ---------------------------------------------------------------------------
+
+const { validateClaim, generateCard } = require('../rooms');
+
+describe('validateClaim()', () => {
+  const grid = [
+    ['A', 'B', 'C', 'D', 'E'],
+    ['F', 'G', 'H', 'I', 'J'],
+    ['K', 'L', 'M', 'N', 'O'],
+    ['P', 'Q', 'R', 'S', 'T'],
+    ['U', 'V', 'W', 'X', 'Y'],
+  ];
+
+  it('detects a valid row line', () => {
+    const result = validateClaim(grid, ['A', 'B', 'C', 'D', 'E', 'Z'], 'line');
+    expect(result.valid).toBe(true);
+    expect(result.pattern).toEqual(['A', 'B', 'C', 'D', 'E']);
+  });
+
+  it('detects a valid column line', () => {
+    const result = validateClaim(grid, ['A', 'F', 'K', 'P', 'U', 'X'], 'line');
+    expect(result.valid).toBe(true);
+    expect(result.pattern).toEqual(['A', 'F', 'K', 'P', 'U']);
+  });
+
+  it('detects a valid diagonal line', () => {
+    const result = validateClaim(grid, ['A', 'G', 'M', 'S', 'Y'], 'line');
+    expect(result.valid).toBe(true);
+    expect(result.pattern).toEqual(['A', 'G', 'M', 'S', 'Y']);
+  });
+
+  it('returns invalid for incomplete line', () => {
+    const result = validateClaim(grid, ['A', 'B', 'C', 'D'], 'line');
+    expect(result.valid).toBe(false);
+    expect(result.pattern).toEqual([]);
+  });
+
+  it('detects a valid full-house', () => {
+    const all = grid.flat();
+    const result = validateClaim(grid, all, 'full-house');
+    expect(result.valid).toBe(true);
+    expect(result.pattern).toEqual(all);
+  });
+
+  it('returns invalid for incomplete full-house', () => {
+    const result = validateClaim(grid, ['A', 'B', 'C'], 'full-house');
+    expect(result.valid).toBe(false);
+    expect(result.pattern).toEqual([]);
+  });
+
+  it('returns invalid for unknown claimType', () => {
+    const result = validateClaim(grid, grid.flat(), 'bingo');
+    expect(result.valid).toBe(false);
+  });
+});
+
+describe('POST /rooms/:code/claim', () => {
+  it('returns 400 for missing playerName', async () => {
+    const { body: created } = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Host', themeId: 'classic' });
+
+    const res = await request(app)
+      .post(`/rooms/${created.code}/claim`)
+      .send({ claimType: 'line' });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('returns 400 for invalid claimType', async () => {
+    const { body: created } = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Host', themeId: 'classic' });
+
+    const res = await request(app)
+      .post(`/rooms/${created.code}/claim`)
+      .send({ playerName: 'Alice', claimType: 'bingo' });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('returns 404 for unknown room', async () => {
+    const res = await request(app)
+      .post('/rooms/ZZZZZZ/claim')
+      .send({ playerName: 'Alice', claimType: 'line' });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('returns 404 when player has no card', async () => {
+    const { body: created } = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Host', themeId: 'classic' });
+
+    await request(app).post(`/rooms/${created.code}/join`).send({ playerName: 'Alice' });
+
+    const res = await request(app)
+      .post(`/rooms/${created.code}/claim`)
+      .send({ playerName: 'Alice', claimType: 'line' });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('returns { valid: false } for an invalid claim without broadcasting', async () => {
+    const { body: created } = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Host', themeId: 'classic', prize: '🏆 Trophy' });
+
+    await request(app).post(`/rooms/${created.code}/join`).send({ playerName: 'Alice' });
+    await request(app).get(`/rooms/${created.code}/card?playerName=Alice`);
+
+    // No items called — claim is invalid
+    const res = await request(app)
+      .post(`/rooms/${created.code}/claim`)
+      .send({ playerName: 'Alice', claimType: 'line' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.valid).toBe(false);
+    expect(res.body.pattern).toEqual([]);
+  });
+
+  it('returns { valid: true } and pattern when claim is valid', async () => {
+    const { body: created } = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Host', themeId: 'classic', prize: '🏆 Trophy' });
+
+    await request(app).post(`/rooms/${created.code}/join`).send({ playerName: 'Alice' });
+    // Generate card
+    const { body: cardBody } = await request(app)
+      .get(`/rooms/${created.code}/card?playerName=Alice`);
+
+    // Mark the first row as called on the room
+    const room = rooms.get(created.code);
+    room.calledItems = cardBody.grid[0]; // entire first row called
+
+    const res = await request(app)
+      .post(`/rooms/${created.code}/claim`)
+      .send({ playerName: 'Alice', claimType: 'line' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.valid).toBe(true);
+    expect(res.body.pattern).toEqual(cardBody.grid[0]);
+  });
+});

@@ -3,7 +3,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Animated,
+  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Animated, ActivityIndicator,
 } from 'react-native';
 import { useBingoStore } from '../store/bingoStore';
 import { colors, spacing, radius, typography } from '../theme';
@@ -92,8 +92,11 @@ export default function CardScreen() {
   const {
     card, marked, dauberColor, calledItems, isHost,
     sessionCode, playerName, themeId, isCalling, startAutoCalling, stopAutoCalling, resetGame,
-    ws,
+    ws, audioMuted,
   } = useBingoStore();
+  const toggleAudioMuted = useBingoStore(s => s.toggleAudioMuted);
+
+  const isReconnecting = useBingoStore(s => s.isReconnecting ?? false);
 
   const [currentCall, setCurrentCall] = useState('');
   const [quip, setQuip] = useState('Eyes down — let\'s play Bingo! 🎱');
@@ -132,6 +135,12 @@ export default function CardScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
+      {isReconnecting && (
+        <View style={s.reconnectBanner}>
+          <ActivityIndicator size="small" color={colors.bg} style={s.reconnectSpinner} />
+          <Text style={s.reconnectText}>Reconnecting… Please wait</Text>
+        </View>
+      )}
       <ScrollView contentContainerStyle={s.content}>
         {/* Header */}
         <View style={s.header}>
@@ -139,7 +148,12 @@ export default function CardScreen() {
             <Text style={s.playerName}>{playerName}</Text>
             <Text style={s.roomCode}>Room: {sessionCode}</Text>
           </View>
-          <View style={[s.dauberPreview, { backgroundColor: dauberColor }]} />
+          <View style={s.headerRight}>
+            <TouchableOpacity onPress={toggleAudioMuted} style={s.muteBtn} accessibilityLabel={audioMuted ? 'Unmute audio' : 'Mute audio'}>
+              <Text style={s.muteBtnText}>{audioMuted ? '🔇' : '🔊'}</Text>
+            </TouchableOpacity>
+            <View style={[s.dauberPreview, { backgroundColor: dauberColor }]} />
+          </View>
         </View>
 
         {/* Current Call Banner */}
@@ -231,6 +245,9 @@ const s = StyleSheet.create({
   header:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
   playerName:     { ...typography.subhead, color: colors.text },
   roomCode:       { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  headerRight:    { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  muteBtn:        { padding: 6 },
+  muteBtnText:    { fontSize: 22 },
   dauberPreview:  { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: colors.white },
 
   callBanner:     {
@@ -295,4 +312,15 @@ const s = StyleSheet.create({
 
   resetBtn:       { alignItems: 'center', paddingVertical: spacing.md },
   resetBtnText:   { color: colors.textMuted, fontSize: 14 },
+
+  reconnectBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  reconnectSpinner: { marginRight: spacing.sm },
+  reconnectText:  { color: colors.bg, fontSize: 13, fontWeight: '700' },
 });
