@@ -5,8 +5,7 @@
  * Called from index.js after the WebSocket server is created.
  */
 
-const { getRoom, addClient, removeClient, broadcastToRoom, nextCall, getRoomState, savePlayerCard, getPlayerCard } = require('./rooms');
-const { saveGame } = require('./gameHistory');
+const { getRoom, addClient, removeClient, broadcastToRoom, nextCall, getRoomState, getPlayer } = require('./rooms');
 
 /** @type {Map<string, ReturnType<typeof setInterval>>} */
 const autoCallers = new Map();
@@ -92,12 +91,15 @@ function registerGameHandlers(wss) {
           addClient(code, ws);
 
           // Register player if not already present (host joins without a players entry)
-          const existingPlayer = name && name !== room.hostName
-            ? room.players.find(p => p.name === name)
-            : null;
-
-          if (name && name !== room.hostName && !existingPlayer) {
-            room.players.push({ name, card: null, joinedAt: new Date() });
+          if (name && name !== room.hostName) {
+            const existing = getPlayer(code, name);
+            if (!existing) {
+              room.players.push({ name, joinedAt: new Date() });
+            } else if (existing.disconnectedAt) {
+              // Player reconnecting — clear the disconnect timestamp and notify the room
+              delete existing.disconnectedAt;
+              broadcastToRoom(code, { type: 'player-reconnected', playerName: name });
+            }
           }
 
           broadcastToRoom(code, { type: 'room-state', ...getRoomState(code) });
@@ -222,8 +224,19 @@ function registerGameHandlers(wss) {
       removeClient(playerCode, ws);
 
       const room = getRoom(playerCode);
-      if (room && room.clients.size === 0) {
-        stopAutoCallerForRoom(playerCode);
+      if (room) {
+        if (room.clients.size === 0) {
+          stopAutoCallerForRoom(playerCode);
+        }
+
+        // Mark the player as disconnected and notify remaining clients
+        if (playerName) {
+          const player = getPlayer(playerCode, playerName);
+          if (player) {
+            player.disconnectedAt = new Date();
+            broadcastToRoom(playerCode, { type: 'player-disconnected', playerName });
+          }
+        }
       }
     });
   });
