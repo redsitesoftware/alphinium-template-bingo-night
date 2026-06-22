@@ -16,6 +16,18 @@ const PORT = process.env.PORT || 3001;
 // URL directly).  Default to '*' so those calls work without extra OPS config.
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || '*';
 
+// ── Self-ping keep-alive ──────────────────────────────────────────────────────
+// Alphinium's proxy expires idle pods when no real application traffic is seen.
+// Health-check pings (intercepted by the proxy itself) do NOT reset the idle
+// timer.  We must ping a real application route through the public URL so the
+// request actually traverses the proxy.
+//
+// Startup sequence:
+//   1. SERVER_SELF_URL set   → ping the external URL immediately from boot.
+//   2. SERVER_SELF_URL unset → ping localhost on boot (keeps the process warm);
+//      switch to the real external URL on the first proxied request whose
+//      x-forwarded-host header reveals the pod's public address.
+//
 app.use(cors({ origin: FRONTEND_ORIGIN }));
 app.use(express.json());
 
