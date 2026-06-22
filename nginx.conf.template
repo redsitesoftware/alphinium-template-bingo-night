@@ -1,0 +1,56 @@
+worker_processes auto;
+events { worker_connections 1024; }
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    gzip on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+
+    # DNS resolver for dynamic proxy_pass targets (used in two-pod mode)
+    resolver 1.1.1.1 8.8.8.8 valid=30s;
+
+    # Map for WebSocket upgrade header
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+
+    server {
+        listen 80 default_server;
+        server_name _;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+
+        # Proxy REST API and WebSocket connections to the rooms backend.
+        # In two-pod mode: ROOMS_UPSTREAM is the external server pod URL set by start.sh.
+        # In single-pod mode: ROOMS_UPSTREAM falls back to the local Node.js at 127.0.0.1:3001.
+        # Using nginx as the proxy keeps the browser origin same-site, avoiding CORS complexity.
+        location /rooms {
+            set $rooms_upstream "${ROOMS_UPSTREAM}";
+            proxy_pass $rooms_upstream;
+            proxy_ssl_server_name on;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $proxy_host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 3600s;
+        }
+
+        location / { try_files $uri $uri/ /index.html; }
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+        location = /index.html { add_header Cache-Control "no-cache"; }
+    }
+}
