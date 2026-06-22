@@ -5,7 +5,8 @@
  * Called from index.js after the WebSocket server is created.
  */
 
-const { getRoom, addClient, removeClient, broadcastToRoom, nextCall, getRoomState, getPlayer } = require('./rooms');
+const { getRoom, addClient, removeClient, broadcastToRoom, nextCall, getRoomState } = require('./rooms');
+const { saveGame } = require('./gameHistory');
 
 /** @type {Map<string, ReturnType<typeof setInterval>>} */
 const autoCallers = new Map();
