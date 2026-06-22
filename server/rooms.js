@@ -100,15 +100,16 @@ function shuffle(arr) {
 
 /**
  * Create a new room and store it.
- * @param {string|{hostName:string,themeId?:string}} hostNameOrOpts
+ * @param {string|{hostName:string,themeId?:string,prize?:string}} hostNameOrOpts
  * @param {string} [themeId]
  * @returns {object} The created room
  */
 function createRoom(hostNameOrOpts, themeId) {
-  // Support both createRoom('Alice','t1') and createRoom({hostName:'Alice',themeId:'t1'})
+  // Support both createRoom('Alice','t1') and createRoom({hostName:'Alice',themeId:'t1',prize:'...'})
   let hostName;
+  let prize;
   if (typeof hostNameOrOpts === 'object') {
-    ({ hostName, themeId } = hostNameOrOpts);
+    ({ hostName, themeId, prize } = hostNameOrOpts);
   } else {
     hostName = hostNameOrOpts;
   }
@@ -120,6 +121,7 @@ function createRoom(hostNameOrOpts, themeId) {
     code,
     hostName,
     themeId: themeId || null,
+    prize: prize || null,
     players: [],
     createdAt: now,
     lastActivityAt: now,

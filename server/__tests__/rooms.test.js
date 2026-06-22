@@ -128,6 +128,24 @@ describe('POST /rooms', () => {
     });
   });
 
+  it('stores prize on the room when provided', async () => {
+    const res = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Eve', themeId: 'classic', prize: '🏆 Bottle of wine' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.prize).toBe('🏆 Bottle of wine');
+  });
+
+  it('sets prize to null when omitted', async () => {
+    const res = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Eve', themeId: 'classic' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.prize).toBeNull();
+  });
+
   it('returns 400 when hostName is missing', async () => {
     const res = await request(app)
       .post('/rooms')
@@ -215,6 +233,17 @@ describe('GET /rooms/:code', () => {
       hostName: 'Ivan',
       phase: 'lobby',
     });
+  });
+
+  it('returns prize in the room state', async () => {
+    const { body: created } = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Ivan', themeId: 'classic', prize: '🏆 Bottle of wine' });
+
+    const res = await request(app).get(`/rooms/${created.code}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.prize).toBe('🏆 Bottle of wine');
   });
 
   it('returns 404 for an unknown code', async () => {

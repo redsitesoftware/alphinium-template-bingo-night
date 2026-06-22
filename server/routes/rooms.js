@@ -10,13 +10,13 @@ router.get('/', (_req, res) => {
 
 // POST /rooms — create a new room
 router.post('/', (req, res) => {
-  const { hostName, themeId } = req.body;
+  const { hostName, themeId, prize } = req.body;
 
   if (!hostName) {
     return res.status(400).json({ error: 'hostName is required' });
   }
 
-  const room = createRoom({ hostName, themeId });
+  const room = createRoom({ hostName, themeId, prize });
   return res.status(201).json(room);
 });
 
