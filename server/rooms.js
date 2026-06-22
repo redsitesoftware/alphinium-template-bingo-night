@@ -1,5 +1,6 @@
 const { customAlphabet } = require('nanoid');
 const { WebSocket } = require('ws');
+const { getTheme } = require('./themes');
 
 const CODE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const _rawCode = customAlphabet(CODE_ALPHABET, 6);
@@ -115,7 +116,9 @@ function createRoom(hostNameOrOpts, themeId) {
 
   const code = generateCode();
   const now = new Date();
-  const pool = CALLS_BY_THEME[themeId] || CALLS_BY_THEME.office;
+  // Resolve call pool: prefer theme registry, fall back to CALLS_BY_THEME, then default.
+  const theme = themeId ? getTheme(themeId) : null;
+  const pool = (theme && theme.calls) || CALLS_BY_THEME[themeId] || CALLS_BY_THEME.office;
   const room = {
     code,
     hostName,
