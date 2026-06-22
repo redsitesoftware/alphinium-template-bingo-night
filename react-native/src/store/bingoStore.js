@@ -4,9 +4,17 @@
  */
 import { create } from 'zustand';
 
-const SERVER_HOST = process.env.EXPO_PUBLIC_WS_HOST || 'localhost:3001';
+// In deployed (non-localhost) browser environments, fall back to the page's own origin
+// so that WS connections work even when EXPO_PUBLIC_WS_HOST was not injected at build time.
+const _envHost = process.env.EXPO_PUBLIC_WS_HOST;
+const SERVER_HOST = _envHost ||
+  (typeof window !== 'undefined' &&
+   !window.location.hostname.startsWith('localhost') &&
+   !window.location.hostname.startsWith('127.')
+    ? window.location.host
+    : 'localhost:3001');
 // Use secure WebSocket for non-localhost hosts (deployed pods run behind HTTPS)
-const WS_PROTOCOL = SERVER_HOST.startsWith('localhost') || SERVER_HOST.startsWith('127.') ? 'ws' : 'wss';
+const WS_PROTOCOL = (SERVER_HOST.startsWith('localhost') || SERVER_HOST.startsWith('127.')) ? 'ws' : 'wss';
 
 // --- Themed bingo call sets ---
 export const THEMES = [
@@ -193,7 +201,8 @@ export const useBingoStore = create((set, get) => ({
       existing.close();
     }
 
-    const ws = new WebSocket(`${WS_PROTOCOL}://${SERVER_HOST}/`);
+    // Connect via /rooms — nginx proxies this path to the Node.js server in both single and two-pod mode
+    const ws = new WebSocket(`${WS_PROTOCOL}://${SERVER_HOST}/rooms`);
 
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: 'join-room', payload: { code, playerName } }));
