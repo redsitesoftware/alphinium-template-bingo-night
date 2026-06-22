@@ -1,49 +1,139 @@
 /**
- * Minimal theme registry for the Bingo Night server.
+ * Centralised theme registry for the Bingo Night server.
  *
- * Each theme exposes a `calls` array — the pool of items that will be
- * shuffled into a room's callQueue when the room is created.
+ * Each theme exposes a `calls` array — the pool of items shuffled into a
+ * room's callQueue when the room is created.  The `calls` array is exposed
+ * via GET /themes/:id so the client can generate cards locally.
+ * GET /themes (list) omits calls to keep the payload small.
  *
  * Add new themes here as the game content expands.
  */
 
-/** @type {Map<string, {id:string, name:string, calls:string[]}>} */
+/** @type {Map<string, {id:string, name:string, emoji?:string, calls:string[]}>} */
 const themeRegistry = new Map();
 
 /**
  * Register a theme so it can be looked up by ID.
- * @param {{id:string, name:string, calls:string[]}} theme
+ * @param {{id:string, name:string, emoji?:string, calls:string[]}} theme
  */
 function registerTheme(theme) {
   themeRegistry.set(theme.id, theme);
 }
 
 /**
- * Retrieve a theme by ID.
+ * Retrieve a theme by ID (includes calls array).
  * @param {string} id
- * @returns {{id:string, name:string, calls:string[]}|null}
+ * @returns {{id:string, name:string, emoji?:string, calls:string[]}|null}
  */
 function getTheme(id) {
   return themeRegistry.get(id) || null;
 }
 
+/**
+ * Return all registered themes as a list, omitting the `calls` array.
+ * @returns {{id:string, name:string, emoji?:string}[]}
+ */
+function listThemes() {
+  return Array.from(themeRegistry.values()).map(({ id, name, emoji }) => {
+    const entry = { id, name };
+    if (emoji !== undefined) entry.emoji = emoji;
+    return entry;
+  });
+}
+
 // ── Built-in themes ───────────────────────────────────────────────────────────
+
+registerTheme({
+  id: 'office',
+  name: 'Office Life',
+  emoji: '💼',
+  calls: [
+    'Synergy!', 'Circle back', 'Move the needle', 'Boil the ocean', 'Low-hanging fruit',
+    'Deep dive', 'Pivot!', 'Blue sky thinking', 'Bandwidth', 'Take it offline',
+    'Disruptive', 'Scalable solution', 'Touch base', 'Action items', 'Game changer',
+    'Value add', 'Pain points', 'Drill down', 'Going forward', 'Leveraging',
+    'Agile mindset', 'KPI', 'ROI focus', 'Stakeholder buy-in', 'Quick win',
+    'Paradigm shift', 'Core competency', 'Thought leader', 'Ecosystem', 'Innovation hub',
+  ],
+});
+
+registerTheme({
+  id: 'xmas',
+  name: 'Christmas',
+  emoji: '🎄',
+  calls: [
+    'Santa Claus', 'Reindeer', 'Mistletoe', 'Eggnog', 'Stocking',
+    'Gingerbread', 'Tinsel', 'Candy cane', 'Snowflake', 'Elf on the shelf',
+    'Christmas tree', 'Jingle bells', 'Wrapping paper', 'Secret Santa', 'Mulled wine',
+    'Nativity', 'Boxing Day', 'Turkey dinner', 'Crackers', 'Carol singing',
+    'Baubles', 'Star on top', 'Ugly jumper', 'White Christmas', 'Naughty list',
+    'Coal in stocking', 'Ho ho ho', 'Chimney', 'Sleigh bells', 'North Pole',
+  ],
+});
+
+registerTheme({
+  id: 'aussie',
+  name: 'Aussie Slang',
+  emoji: '🦘',
+  calls: [
+    "G'day mate", 'Arvo', 'Servo', 'Brekkie', 'No worries',
+    "She'll be right", 'Crikey', 'Strewth', 'Reckon', 'Thongs',
+    'Sunnies', 'Bikkie', 'Ute', 'Barbie', 'Snag',
+    'Dead set', 'Fair dinkum', 'Ripper', 'Drongo', 'Larrikin',
+    'Dingo', 'Billabong', 'Bush tucker', 'Goon bag', 'Flat white',
+    'Dag', 'Dropbear', 'Maccas', 'Bottle-o', 'Smoko',
+  ],
+});
+
+registerTheme({
+  id: 'tech',
+  name: 'Tech Buzzwords',
+  emoji: '🤖',
+  calls: [
+    'Blockchain', 'AI/ML', 'Cloud native', 'DevOps', 'Kubernetes',
+    'Microservices', 'API-first', 'Zero trust', 'LLM', 'Prompt engineer',
+    'Digital twin', 'Edge computing', 'Serverless', 'Observability', 'GitOps',
+    'Tech debt', 'Rubber duck', 'Stack overflow', 'npm install', 'It works locally',
+    'Ship it', '10x engineer', 'Move fast', 'Agile sprint', 'Standup',
+    'Pull request', 'Code review', 'Hot reload', 'Type safety', 'Ship or skip',
+  ],
+});
 
 registerTheme({
   id: 'classic',
   name: 'Classic Bingo',
-  calls: Array.from({ length: 75 }, (_, i) => String(i + 1)),
+  emoji: '🎱',
+  calls: [
+    "One! Number one — Kelly's eye!", 'Two — one little duck!',
+    'Three — cup of tea!', 'Four — knock at the door!',
+    'Five — man alive!', 'Six — half a dozen!',
+    'Seven — lucky seven!', 'Eight — one fat lady!',
+    "Nine — doctor's orders!", "Ten — (Prime Minister's) den!",
+    'Eleven — legs eleven!', 'Twelve — one dozen!',
+    'Thirteen — unlucky for some!', 'Fourteen — valentines day!',
+    'Fifteen — young and keen!', 'Sixteen — sweet sixteen!',
+    'Seventeen — dancing queen!', 'Eighteen — coming of age!',
+    'Nineteen — goodbye teens!', 'Twenty — one score!',
+    'Twenty-one — key of the door!', 'Twenty-two — two little ducks!',
+    'Twenty-three — thee and me!', 'Twenty-four — two dozen!',
+    'Twenty-five — duck and dive!', 'Twenty-six — pick and mix!',
+    'Twenty-seven — gateway to heaven!', 'Twenty-eight — overweight!',
+    'Twenty-nine — rise and shine!', 'Thirty — Burlington Bertie!',
+  ],
 });
 
 registerTheme({
   id: 'pub-quiz',
   name: 'Pub Quiz Night',
+  emoji: '🍺',
   calls: [
-    'Question 1', 'Question 2', 'Question 3', 'Question 4', 'Question 5',
-    'Question 6', 'Question 7', 'Question 8', 'Question 9', 'Question 10',
-    'Question 11', 'Question 12', 'Question 13', 'Question 14', 'Question 15',
-    'Question 16', 'Question 17', 'Question 18', 'Question 19', 'Question 20',
+    'Name that tune', 'Picture round', 'Geography question', 'History fact', 'Science quiz',
+    'Sports trivia', 'Celebrity round', 'Food & drink', 'Music decade', 'Movie quotes',
+    'Capital cities', 'Famous firsts', 'Sporting records', 'TV shows', 'World records',
+    'Art & culture', 'Tech & gadgets', 'Nature & wildlife', 'Politics & news', 'Literature',
+    'Maths puzzle', 'Anagram round', 'True or false', 'Final question', 'Speed round',
+    'Bonus point', 'Tiebreaker', 'Joker round', 'Half-time snack', 'Last orders!',
   ],
 });
 
-module.exports = { getTheme, registerTheme };
+module.exports = { getTheme, listThemes, registerTheme };

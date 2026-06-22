@@ -1,12 +1,9 @@
-/**
- * HomeScreen — Bingo Night landing: host or join
- */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  SafeAreaView, ScrollView, KeyboardAvoidingView, Platform,
+  SafeAreaView, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
-import { useBingoStore, THEMES } from '../store/bingoStore';
+import { useBingoStore } from '../store/bingoStore';
 import { colors, spacing, radius, typography } from '../theme';
 
 export default function HomeScreen() {
@@ -17,7 +14,11 @@ export default function HomeScreen() {
   const [joinName, setJoinName] = useState('');
   const [dauber, setDauber] = useState(colors.daubers[0]);
   const [spectateCode, setSpectateCode] = useState('');
-  const { startAsHost, joinAsPlayer, joinAsSpectator, setDauber: storeDauber } = useBingoStore();
+  const { startAsHost, joinAsPlayer, joinAsSpectator, setDauber: storeDauber, fetchThemes, themes, themesLoading } = useBingoStore();
+
+  useEffect(() => {
+    fetchThemes();
+  }, []);
 
   const handleHost = () => {
     storeDauber(dauber);
@@ -50,16 +51,20 @@ export default function HomeScreen() {
               placeholderTextColor={colors.textMuted} value={name} onChangeText={setName} autoFocus />
 
             <Text style={s.label}>Theme</Text>
-            <View style={s.themeRow}>
-              {THEMES.map(t => (
-                <TouchableOpacity key={t.id}
-                  style={[s.themePill, themeId === t.id && s.themePillActive]}
-                  onPress={() => setThemeId(t.id)}>
-                  <Text style={s.themeEmoji}>{t.emoji}</Text>
-                  <Text style={[s.themeLabel, themeId === t.id && s.themeLabelActive]}>{t.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {themesLoading ? (
+              <ActivityIndicator color={colors.primary} style={{ marginBottom: spacing.lg }} />
+            ) : (
+              <View style={s.themeRow}>
+                {themes.map(t => (
+                  <TouchableOpacity key={t.id}
+                    style={[s.themePill, themeId === t.id && s.themePillActive]}
+                    onPress={() => setThemeId(t.id)}>
+                    <Text style={s.themeEmoji}>{t.emoji}</Text>
+                    <Text style={[s.themeLabel, themeId === t.id && s.themeLabelActive]}>{t.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
 
             <Text style={s.label}>Dauber colour</Text>
             <View style={s.dauberRow}>

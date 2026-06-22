@@ -15,77 +15,44 @@ const SERVER_HOST = _envHost ||
     : 'localhost:3001');
 // Use secure WebSocket for non-localhost hosts (deployed pods run behind HTTPS)
 const WS_PROTOCOL = (SERVER_HOST.startsWith('localhost') || SERVER_HOST.startsWith('127.')) ? 'ws' : 'wss';
+const HTTP_PROTOCOL = WS_PROTOCOL === 'wss' ? 'https' : 'http';
+const THEMES_API_URL = `${HTTP_PROTOCOL}://${SERVER_HOST}/themes`;
 
-// --- Themed bingo call sets ---
-export const THEMES = [
-  { id: 'office',    label: 'Office Life',    emoji: '💼' },
-  { id: 'xmas',      label: 'Christmas',      emoji: '🎄' },
-  { id: 'aussie',    label: 'Aussie Slang',   emoji: '🦘' },
-  { id: 'tech',      label: 'Tech Buzzwords', emoji: '🤖' },
-  { id: 'classic',   label: 'Classic Bingo',  emoji: '🎱' },
+// Fallback theme list displayed when the server is unreachable
+const FALLBACK_THEMES = [
+  { id: 'office',  name: 'Office Life',    emoji: '💼' },
+  { id: 'xmas',    name: 'Christmas',      emoji: '🎄' },
+  { id: 'aussie',  name: 'Aussie Slang',   emoji: '🦘' },
+  { id: 'tech',    name: 'Tech Buzzwords', emoji: '🤖' },
+  { id: 'classic', name: 'Classic Bingo',  emoji: '🎱' },
 ];
 
-const CALLS_BY_THEME = {
+// Minimal call pools used only when the server is unreachable and a card must be generated
+const _FALLBACK_CALLS = {
   office: [
     'Synergy!', 'Circle back', 'Move the needle', 'Boil the ocean', 'Low-hanging fruit',
     'Deep dive', 'Pivot!', 'Blue sky thinking', 'Bandwidth', 'Take it offline',
     'Disruptive', 'Scalable solution', 'Touch base', 'Action items', 'Game changer',
     'Value add', 'Pain points', 'Drill down', 'Going forward', 'Leveraging',
     'Agile mindset', 'KPI', 'ROI focus', 'Stakeholder buy-in', 'Quick win',
-    'Paradigm shift', 'Core competency', 'Thought leader', 'Ecosystem', 'Innovation hub',
-  ],
-  xmas: [
-    'Santa Claus', 'Reindeer', 'Mistletoe', 'Eggnog', 'Stocking',
-    'Gingerbread', 'Tinsel', 'Candy cane', 'Snowflake', 'Elf on the shelf',
-    'Christmas tree', 'Jingle bells', 'Wrapping paper', 'Secret Santa', 'Mulled wine',
-    'Nativity', 'Boxing Day', 'Turkey dinner', 'Crackers', 'Carol singing',
-    'Baubles', 'Star on top', 'Ugly jumper', 'White Christmas', 'Naughty list',
-    'Coal in stocking', 'Ho ho ho', 'Chimney', 'Sleigh bells', 'North Pole',
-  ],
-  aussie: [
-    "G'day mate", 'Arvo', 'Servo', 'Brekkie', 'No worries',
-    'She\'ll be right', 'Crikey', 'Strewth', 'Reckon', 'Thongs',
-    'Sunnies', 'Bikkie', 'Ute', 'Barbie', 'Snag',
-    'Dead set', 'Fair dinkum', 'Ripper', 'Drongo', 'Larrikin',
-    'Dingo', 'Billabong', 'Bush tucker', 'Goon bag', 'Flat white',
-    'Dag', 'Dropbear', 'Maccas', 'Bottle-o', 'Smoko',
-  ],
-  tech: [
-    'Blockchain', 'AI/ML', 'Cloud native', 'DevOps', 'Kubernetes',
-    'Microservices', 'API-first', 'Zero trust', 'LLM', 'Prompt engineer',
-    'Digital twin', 'Edge computing', 'Serverless', 'Observability', 'GitOps',
-    'Tech debt', 'Rubber duck', 'Stack overflow', 'npm install', 'It works locally',
-    'Ship it', '10x engineer', 'Move fast', 'Agile sprint', 'Standup',
-    'Pull request', 'Code review', 'Hot reload', 'Type safety', 'Ship or skip',
-  ],
-  classic: [
-    ...Array.from({ length: 30 }, (_, i) => {
-      const n = i + 1;
-      const calls = [
-        `One! Number one — Kelly's eye!`, `Two — one little duck!`,
-        `Three — cup of tea!`, `Four — knock at the door!`,
-        `Five — man alive!`, `Six — half a dozen!`,
-        `Seven — lucky seven!`, `Eight — one fat lady!`,
-        `Nine — doctor's orders!`, `Ten — (Prime Minister's) den!`,
-        `Eleven — legs eleven!`, `Twelve — one dozen!`,
-        `Thirteen — unlucky for some!`, `Fourteen — valentines day!`,
-        `Fifteen — young and keen!`, `Sixteen — sweet sixteen!`,
-        `Seventeen — dancing queen!`, `Eighteen — coming of age!`,
-        `Nineteen — goodbye teens!`, `Twenty — one score!`,
-        `Twenty-one — key of the door!`, `Twenty-two — two little ducks!`,
-        `Twenty-three — thee and me!`, `Twenty-four — two dozen!`,
-        `Twenty-five — duck and dive!`, `Twenty-six — pick and mix!`,
-        `Twenty-seven — gateway to heaven!`, `Twenty-eight — overweight!`,
-        `Twenty-nine — rise and shine!`, `Thirty — Burlington Bertie!`,
-      ];
-      return calls[i] || `Number ${n}!`;
-    }),
   ],
 };
 
-// Generate a random 5x5 bingo card for a given theme
-function generateCard(themeId) {
-  const pool = [...(CALLS_BY_THEME[themeId] || CALLS_BY_THEME.office)];
+/** Fetch calls for a single theme from the server. Returns null on failure. */
+async function fetchThemeCalls(themeId) {
+  try {
+    const res = await fetch(`${THEMES_API_URL}/${themeId}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return Array.isArray(data.calls) && data.calls.length >= 24 ? data.calls : null;
+  } catch {
+    return null;
+  }
+}
+
+// Generate a random 5x5 bingo card from a call pool array
+function generateCard(calls) {
+  const pool = [...calls];
   // Shuffle
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -130,6 +97,10 @@ export const useBingoStore = create((set, get) => ({
   isHost: false,
   isSpectator: false,
 
+  // Themes (fetched from server)
+  themes: FALLBACK_THEMES,
+  themesLoading: false,
+
   // Card
   card: [],               // 25 strings
   marked: new Set(),      // indices of daubed squares
@@ -150,14 +121,28 @@ export const useBingoStore = create((set, get) => ({
   setDauber: (color) => set({ dauberColor: color }),
   setPlayerName: (name) => set({ playerName: name }),
 
-  startAsHost: (name, themeId) => {
-    const code = Math.random().toString(36).substr(2, 4).toUpperCase();
-    const card = generateCard(themeId);
-    const pool = [...(CALLS_BY_THEME[themeId] || CALLS_BY_THEME.office)];
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
+  /** Fetch theme list from the server. Falls back to FALLBACK_THEMES on error. */
+  fetchThemes: async () => {
+    set({ themesLoading: true });
+    try {
+      const res = await fetch(THEMES_API_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const themes = await res.json();
+      if (Array.isArray(themes) && themes.length > 0) {
+        set({ themes, themesLoading: false });
+        return;
+      }
+      throw new Error('Empty theme list');
+    } catch (err) {
+      console.warn('[bingoStore] fetchThemes failed, using fallback:', err.message);
+      set({ themes: FALLBACK_THEMES, themesLoading: false });
     }
+  },
+
+  startAsHost: async (name, themeId) => {
+    const code = Math.random().toString(36).substr(2, 4).toUpperCase();
+    const calls = (await fetchThemeCalls(themeId)) || _FALLBACK_CALLS.office;
+    const card = generateCard(calls);
     set({
       phase: 'card',
       isHost: true,
@@ -168,7 +153,7 @@ export const useBingoStore = create((set, get) => ({
       marked: new Set([12]), // FREE center
       wins: [],
       calledItems: [],
-      callQueue: pool,
+      callQueue: [],
       isCalling: false,
     });
     get().connectWS(code, name);
@@ -190,8 +175,9 @@ export const useBingoStore = create((set, get) => ({
     });
   },
 
-  joinAsPlayer: (code, name, themeId) => {
-    const card = generateCard(themeId);
+  joinAsPlayer: async (code, name, themeId) => {
+    const calls = (await fetchThemeCalls(themeId)) || _FALLBACK_CALLS.office;
+    const card = generateCard(calls);
     set({
       phase: 'card',
       isHost: false,
