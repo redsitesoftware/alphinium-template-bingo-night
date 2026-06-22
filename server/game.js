@@ -121,13 +121,16 @@ function registerGameHandlers(wss) {
           // Clear any existing timer before starting a new one
           stopAutoCallerForRoom(code);
 
-          const intervalSec = typeof payload.interval === 'number' && payload.interval > 0
-            ? payload.interval
-            : room.callerInterval;
+          // Clamp interval to 5–60 s; fall back to room.callerInterval if not provided
+          const raw = typeof payload.interval === 'number' ? payload.interval : room.callerInterval;
+          const intervalSec = Math.min(60, Math.max(5, raw));
+          room.callerInterval = intervalSec;
 
           room.isCalling = true;
           const timerId = setInterval(() => callNumber(code), intervalSec * 1000);
           autoCallers.set(code, timerId);
+
+          broadcastToRoom(code, { type: 'caller-state', isCalling: true, callerInterval: intervalSec });
           break;
         }
 
@@ -143,6 +146,34 @@ function registerGameHandlers(wss) {
             return;
           }
           stopAutoCallerForRoom(code);
+          broadcastToRoom(code, { type: 'caller-state', isCalling: false, callerInterval: room.callerInterval });
+          break;
+        }
+
+        case 'skip-call': {
+          const code = payload.code?.toUpperCase();
+          const room = getRoom(code);
+          if (!room) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Room not found' }));
+            return;
+          }
+          if (playerName !== room.hostName) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Only the host can skip the current call' }));
+            return;
+          }
+
+          // Fire the next item immediately
+          callNumber(code);
+
+          // If auto-caller is active, clear and restart the timer to reset the interval clock
+          if (autoCallers.has(code)) {
+            clearInterval(autoCallers.get(code));
+            autoCallers.delete(code);
+            const intervalSec = room.callerInterval;
+            const newTimerId = setInterval(() => callNumber(code), intervalSec * 1000);
+            autoCallers.set(code, newTimerId);
+            broadcastToRoom(code, { type: 'caller-state', isCalling: true, callerInterval: intervalSec });
+          }
           break;
         }
 
