@@ -100,15 +100,16 @@ function shuffle(arr) {
 
 /**
  * Create a new room and store it.
- * @param {string|{hostName:string,themeId?:string}} hostNameOrOpts
+ * @param {string|{hostName:string,themeId?:string,prize?:string}} hostNameOrOpts
  * @param {string} [themeId]
  * @returns {object} The created room
  */
 function createRoom(hostNameOrOpts, themeId) {
-  // Support both createRoom('Alice','t1') and createRoom({hostName:'Alice',themeId:'t1'})
+  // Support both createRoom('Alice','t1') and createRoom({hostName:'Alice',themeId:'t1',prize:'...'})
   let hostName;
+  let prize;
   if (typeof hostNameOrOpts === 'object') {
-    ({ hostName, themeId } = hostNameOrOpts);
+    ({ hostName, themeId, prize } = hostNameOrOpts);
   } else {
     hostName = hostNameOrOpts;
   }
@@ -120,6 +121,7 @@ function createRoom(hostNameOrOpts, themeId) {
     code,
     hostName,
     themeId: themeId || null,
+    prize: prize || null,
     players: [],
     createdAt: now,
     lastActivityAt: now,
@@ -132,6 +134,111 @@ function createRoom(hostNameOrOpts, themeId) {
   };
   rooms.set(code, room);
   return room;
+}
+
+/**
+ * Generate a 5×5 bingo card for a player and store it on the player object.
+ * Idempotent — returns existing card if player already has one.
+ * Guarantees uniqueness among cards already assigned in the room.
+ * @param {string} code
+ * @param {string} playerName
+ * @returns {string[][]|null} 5×5 grid, or null if room/player not found
+ */
+function generateCard(code, playerName) {
+  const room = rooms.get(code);
+  if (!room) return null;
+
+  const player = room.players.find(p => p.name === playerName)
+    || (playerName === room.hostName ? { name: playerName, _isHost: true } : null);
+  if (!player) return null;
+
+  // Return existing card (idempotent)
+  if (player.card) return player.card;
+
+  const pool = CALLS_BY_THEME[room.themeId] || CALLS_BY_THEME.office;
+  const existingGrids = room.players
+    .filter(p => p.card)
+    .map(p => JSON.stringify(p.card));
+
+  // Try to generate a unique card (up to 20 attempts)
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const shuffledPool = shuffle(pool);
+    const flat = shuffledPool.slice(0, 25);
+    const grid = [
+      flat.slice(0, 5),
+      flat.slice(5, 10),
+      flat.slice(10, 15),
+      flat.slice(15, 20),
+      flat.slice(20, 25),
+    ];
+    if (!existingGrids.includes(JSON.stringify(grid))) {
+      player.card = grid;
+      // If player is host and not in players array, add a synthetic host tracker
+      if (player._isHost && !room.players.find(p => p.name === playerName)) {
+        room.players.push(player);
+      }
+      room.lastActivityAt = new Date();
+      return grid;
+    }
+  }
+
+  // Fallback: return the last generated grid even if not unique
+  const fallbackFlat = shuffle(pool).slice(0, 25);
+  player.card = [
+    fallbackFlat.slice(0, 5),
+    fallbackFlat.slice(5, 10),
+    fallbackFlat.slice(10, 15),
+    fallbackFlat.slice(15, 20),
+    fallbackFlat.slice(20, 25),
+  ];
+  room.lastActivityAt = new Date();
+  return player.card;
+}
+
+/**
+ * Validate a bingo claim against the room's called items.
+ * @param {string[][]} grid  5×5 bingo card
+ * @param {string[]} calledItems  Items called so far
+ * @param {'line'|'full-house'} claimType
+ * @returns {{ valid: boolean, pattern: string[] }}
+ */
+function validateClaim(grid, calledItems, claimType) {
+  const called = new Set(calledItems);
+  const flat = grid.flat();
+
+  if (claimType === 'full-house') {
+    const valid = flat.every(cell => called.has(cell));
+    return { valid, pattern: valid ? flat : [] };
+  }
+
+  if (claimType === 'line') {
+    // Check rows
+    for (const row of grid) {
+      if (row.every(cell => called.has(cell))) {
+        return { valid: true, pattern: row };
+      }
+    }
+    // Check columns
+    for (let col = 0; col < 5; col++) {
+      const column = grid.map(row => row[col]);
+      if (column.every(cell => called.has(cell))) {
+        return { valid: true, pattern: column };
+      }
+    }
+    // Check diagonals
+    const diag1 = [grid[0][0], grid[1][1], grid[2][2], grid[3][3], grid[4][4]];
+    if (diag1.every(cell => called.has(cell))) {
+      return { valid: true, pattern: diag1 };
+    }
+    const diag2 = [grid[0][4], grid[1][3], grid[2][2], grid[3][1], grid[4][0]];
+    if (diag2.every(cell => called.has(cell))) {
+      return { valid: true, pattern: diag2 };
+    }
+
+    return { valid: false, pattern: [] };
+  }
+
+  return { valid: false, pattern: [] };
 }
 
 /**
@@ -256,5 +363,7 @@ module.exports = {
   addClient,
   removeClient,
   broadcastToRoom,
+  generateCard,
+  validateClaim,
   pruneExpiredRooms,
 };
