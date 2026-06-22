@@ -4,6 +4,9 @@ WORKDIR /app
 COPY react-native/package*.json ./
 RUN npm install --legacy-peer-deps
 COPY react-native/ .
+# Accept build-time arg for WebSocket host (baked into JS bundle by Expo)
+ARG EXPO_PUBLIC_WS_HOST=""
+ENV EXPO_PUBLIC_WS_HOST=$EXPO_PUBLIC_WS_HOST
 RUN npx expo export --platform web --output-dir dist
 
 # Stage 2: dual-mode runtime image — nginx (frontend) + optional embedded Node.js (API)
