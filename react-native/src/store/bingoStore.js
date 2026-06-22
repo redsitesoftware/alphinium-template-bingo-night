@@ -3,6 +3,7 @@
  * Zustand store. Full 5x5 bingo card, WebSocket caller, dauber marking.
  */
 import { create } from 'zustand';
+import { playCallAudio } from '../services/AudioService';
 
 // In deployed (non-localhost) browser environments, fall back to the page's own origin
 // so that WS connections work even when EXPO_PUBLIC_WS_HOST was not injected at build time.
@@ -15,6 +16,26 @@ const SERVER_HOST = _envHost ||
     : 'localhost:3001');
 // Use secure WebSocket for non-localhost hosts (deployed pods run behind HTTPS)
 const WS_PROTOCOL = (SERVER_HOST.startsWith('localhost') || SERVER_HOST.startsWith('127.')) ? 'ws' : 'wss';
+const HTTP_PROTOCOL = WS_PROTOCOL === 'wss' ? 'https' : 'http';
+// Exported so AudioService callers can reference it without duplicating the derivation logic
+export const SERVER_BASE_URL = `${HTTP_PROTOCOL}://${SERVER_HOST}`;
+
+// Persist audioMuted to localStorage (web) so the preference survives page reloads
+const AUDIO_MUTED_KEY = 'bingoNight_audioMuted';
+function loadAudioMuted() {
+  try {
+    return localStorage.getItem(AUDIO_MUTED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+function saveAudioMuted(value) {
+  try {
+    localStorage.setItem(AUDIO_MUTED_KEY, String(value));
+  } catch {
+    // localStorage unavailable (e.g. native) — skip
+  }
+}
 
 // --- Themed bingo call sets ---
 export const THEMES = [
@@ -141,6 +162,9 @@ export const useBingoStore = create((set, get) => ({
   isCalling: false,
   callInterval: null,
 
+  // Audio
+  audioMuted: loadAudioMuted(),
+
   // WebSocket
   ws: null,
   wsConnected: false,
@@ -149,6 +173,11 @@ export const useBingoStore = create((set, get) => ({
   setTheme: (themeId) => set({ themeId }),
   setDauber: (color) => set({ dauberColor: color }),
   setPlayerName: (name) => set({ playerName: name }),
+  toggleAudioMuted: () => {
+    const next = !get().audioMuted;
+    saveAudioMuted(next);
+    set({ audioMuted: next });
+  },
 
   startAsHost: (name, themeId) => {
     const code = Math.random().toString(36).substr(2, 4).toUpperCase();
@@ -242,12 +271,19 @@ export const useBingoStore = create((set, get) => ({
           });
           break;
 
-        case 'number-called':
+        case 'number-called': {
+          const newItem = msg.item;
           set({
-            calledItems: msg.calledItems ?? [...get().calledItems, msg.item],
+            calledItems: msg.calledItems ?? [...get().calledItems, newItem],
             callQueue: Array(msg.callQueueLength ?? 0).fill(null),
           });
+          // Play audio only for active players (not spectators, not pre-deal)
+          const { isSpectator, card, audioMuted } = get();
+          if (!isSpectator && card.length > 0 && newItem) {
+            playCallAudio(newItem, SERVER_BASE_URL, audioMuted);
+          }
           break;
+        }
 
         case 'game-ended':
           set({
