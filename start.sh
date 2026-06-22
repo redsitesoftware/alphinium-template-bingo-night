@@ -7,6 +7,11 @@ set -e
 # Ensure nginx log dirs exist (needed on node:alpine base)
 mkdir -p /var/log/nginx /var/lib/nginx/tmp /run
 
+# Force Node.js to use internal port 3001.
+# The deploy API may inject PORT=80 (matching the container's EXPOSE),
+# which would conflict with nginx. Override it here.
+export PORT=3001
+
 # Start Node.js server in background
 node /server/index.js &
 NODE_PID=$!
