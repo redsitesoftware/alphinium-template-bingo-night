@@ -5,27 +5,28 @@ const express = require('express');
 
 const router = express.Router();
 
-// Valid bingo call pattern: letter-number (B-7, I-23, N-FREE, etc.)
-const VALID_ITEM_RE = /^[A-Za-z]-(\d+|FREE)$/i;
-
-// In-memory cache: label → Buffer of MP3 bytes
+// In-memory cache: label → Buffer
 const audioCache = new Map();
 
-const DEFAULT_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // ElevenLabs "Rachel" voice
+// Bingo call labels contain letters, digits, hyphens and spaces (e.g. "B-7", "N-FREE", "Call Me Maybe")
+const VALID_ITEM_RE = /^[A-Za-z0-9][A-Za-z0-9 '_.,\-]{0,199}$/;
 
 /**
- * Fetch TTS audio from ElevenLabs and return a Buffer of MP3 bytes.
+ * Fetch MP3 audio from ElevenLabs TTS for the given text label.
+ * Returns a Buffer containing the MP3 data.
+ * @param {string} label
+ * @returns {Promise<Buffer>}
  */
-function fetchElevenLabsTTS(text) {
-  return new Promise((resolve, reject) => {
-    const apiKey = process.env.ELEVENLABS_API_KEY;
-    const voiceId = process.env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE_ID;
-    const body = JSON.stringify({
-      text,
-      model_id: 'eleven_monolingual_v1',
-      voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-    });
+function fetchFromElevenLabs(label) {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  const voiceId = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM';
+  const body = JSON.stringify({
+    text: label,
+    model_id: 'eleven_monolingual_v1',
+    voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+  });
 
+  return new Promise((resolve, reject) => {
     const options = {
       hostname: 'api.elevenlabs.io',
       path: `/v1/text-to-speech/${voiceId}`,
@@ -33,15 +34,15 @@ function fetchElevenLabsTTS(text) {
       headers: {
         'xi-api-key': apiKey,
         'Content-Type': 'application/json',
+        'Accept': 'audio/mpeg',
         'Content-Length': Buffer.byteLength(body),
-        Accept: 'audio/mpeg',
       },
     };
 
     const req = https.request(options, (res) => {
       if (res.statusCode !== 200) {
         res.resume();
-        return reject(new Error(`ElevenLabs API returned ${res.statusCode}`));
+        return reject(new Error(`ElevenLabs returned status ${res.statusCode}`));
       }
       const chunks = [];
       res.on('data', (chunk) => chunks.push(chunk));
@@ -54,19 +55,14 @@ function fetchElevenLabsTTS(text) {
   });
 }
 
-/**
- * GET /audio/:item
- *
- * Returns an MP3 for the given bingo call label (e.g. B-7, I-23, N-FREE).
- *
- * - ELEVENLABS_API_KEY set   → synthesise via ElevenLabs, cache result, stream MP3
- * - ELEVENLABS_API_KEY unset → 204 No Content (client falls back to browser TTS)
- * - Unknown item format      → 400 Bad Request
- */
+// GET /audio/:item
+// Returns MP3 audio for the given bingo call label.
+// - With ELEVENLABS_API_KEY: synthesises and streams audio/mpeg (cached in memory).
+// - Without ELEVENLABS_API_KEY: responds 204 so the client falls back to browser TTS.
 router.get('/:item', async (req, res) => {
-  const item = req.params.item.toUpperCase();
+  const item = req.params.item;
 
-  if (!VALID_ITEM_RE.test(item)) {
+  if (!item || !VALID_ITEM_RE.test(item)) {
     return res.status(400).json({ error: 'Invalid bingo call item' });
   }
 
@@ -74,26 +70,25 @@ router.get('/:item', async (req, res) => {
     return res.status(204).end();
   }
 
+  // Serve from cache if available
   if (audioCache.has(item)) {
     const cached = audioCache.get(item);
     res.set('Content-Type', 'audio/mpeg');
     res.set('Content-Length', cached.length);
-    return res.end(cached);
+    return res.send(cached);
   }
 
   try {
-    // Make label more natural for speech: "B 7" instead of "B-7", "N FREE" etc.
-    const spokenLabel = item.replace('-', ' ');
-    const mp3Buffer = await fetchElevenLabsTTS(spokenLabel);
+    const mp3Buffer = await fetchFromElevenLabs(item);
     audioCache.set(item, mp3Buffer);
     res.set('Content-Type', 'audio/mpeg');
     res.set('Content-Length', mp3Buffer.length);
-    return res.end(mp3Buffer);
+    return res.send(mp3Buffer);
   } catch (err) {
-    console.error('ElevenLabs TTS error:', err.message);
-    return res.status(502).json({ error: 'TTS service error' });
+    console.error('[audio] ElevenLabs TTS error:', err.message);
+    return res.status(502).json({ error: 'TTS service unavailable' });
   }
 });
 
 module.exports = router;
-module.exports._audioCache = audioCache; // exposed for testing
+module.exports.audioCache = audioCache;
