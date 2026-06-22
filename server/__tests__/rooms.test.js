@@ -2,7 +2,7 @@
 
 const request = require('supertest');
 const app = require('../index');
-const { rooms, generateCode, createRoom, pruneExpiredRooms } = require('../rooms');
+const { rooms, generateCode, createRoom, pruneExpiredRooms, generateCard } = require('../rooms');
 
 beforeEach(() => {
   rooms.clear();
@@ -194,6 +194,125 @@ describe('POST /rooms/:code/join', () => {
 
     expect(res.status).toBe(409);
     expect(res.body).toHaveProperty('error');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// generateCard() — unit tests
+// ---------------------------------------------------------------------------
+
+describe('generateCard()', () => {
+  it('returns null for unknown room', () => {
+    expect(generateCard('ZZZZZZ', 'Alice')).toBeNull();
+  });
+
+  it('returns null for player not in room', () => {
+    const room = createRoom('Host', 'classic');
+    expect(generateCard(room.code, 'Ghost')).toBeNull();
+  });
+
+  it('returns a 5×5 grid of 25 unique strings', () => {
+    const room = createRoom('Host', 'classic');
+    room.players.push({ name: 'Alice', joinedAt: new Date() });
+    const card = generateCard(room.code, 'Alice');
+    expect(card).toHaveProperty('grid');
+    expect(card.grid).toHaveLength(5);
+    card.grid.forEach((row) => expect(row).toHaveLength(5));
+    const flat = card.grid.flat();
+    expect(new Set(flat).size).toBe(25);
+  });
+
+  it('is idempotent — returns the same card on repeated calls', () => {
+    const room = createRoom('Host', 'classic');
+    room.players.push({ name: 'Alice', joinedAt: new Date() });
+    const first = generateCard(room.code, 'Alice');
+    const second = generateCard(room.code, 'Alice');
+    expect(second.grid).toEqual(first.grid);
+  });
+
+  it('assigns different cards to two players in the same room', () => {
+    const room = createRoom('Host', 'classic');
+    room.players.push({ name: 'Alice', joinedAt: new Date() });
+    room.players.push({ name: 'Bob', joinedAt: new Date() });
+    const cardA = generateCard(room.code, 'Alice');
+    const cardB = generateCard(room.code, 'Bob');
+    expect(cardA.grid.flat().join('|')).not.toBe(cardB.grid.flat().join('|'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /rooms/:code/card
+// ---------------------------------------------------------------------------
+
+describe('GET /rooms/:code/card', () => {
+  it('returns 400 when playerName is missing', async () => {
+    const { body: created } = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Host', themeId: 'classic' });
+
+    const res = await request(app).get(`/rooms/${created.code}/card`);
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('returns 404 for an unknown room code', async () => {
+    const res = await request(app).get('/rooms/ZZZZZZ/card?playerName=Alice');
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('returns 404 when player has not joined', async () => {
+    const { body: created } = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Host', themeId: 'classic' });
+
+    const res = await request(app).get(`/rooms/${created.code}/card?playerName=Ghost`);
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('returns 200 with a 5×5 grid after player joins', async () => {
+    const { body: created } = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Host', themeId: 'classic' });
+
+    await request(app)
+      .post(`/rooms/${created.code}/join`)
+      .send({ playerName: 'Alice' });
+
+    const res = await request(app).get(`/rooms/${created.code}/card?playerName=Alice`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('grid');
+    expect(res.body.grid).toHaveLength(5);
+    res.body.grid.forEach((row) => expect(row).toHaveLength(5));
+  });
+
+  it('returns the same card on repeated requests (idempotent)', async () => {
+    const { body: created } = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Host', themeId: 'classic' });
+
+    await request(app)
+      .post(`/rooms/${created.code}/join`)
+      .send({ playerName: 'Alice' });
+
+    const first = await request(app).get(`/rooms/${created.code}/card?playerName=Alice`);
+    const second = await request(app).get(`/rooms/${created.code}/card?playerName=Alice`);
+    expect(second.body.grid).toEqual(first.body.grid);
+  });
+
+  it('assigns different grids to two different players', async () => {
+    const { body: created } = await request(app)
+      .post('/rooms')
+      .send({ hostName: 'Host', themeId: 'classic' });
+
+    await request(app).post(`/rooms/${created.code}/join`).send({ playerName: 'Alice' });
+    await request(app).post(`/rooms/${created.code}/join`).send({ playerName: 'Bob' });
+
+    const resA = await request(app).get(`/rooms/${created.code}/card?playerName=Alice`);
+    const resB = await request(app).get(`/rooms/${created.code}/card?playerName=Bob`);
+
+    expect(resA.body.grid.flat().join('|')).not.toBe(resB.body.grid.flat().join('|'));
   });
 });
 

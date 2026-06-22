@@ -47,15 +47,7 @@ app.get('/health', (_req, res) => {
 let _resolvedSelfUrl = process.env.SERVER_SELF_URL || process.env.EXPO_PUBLIC_ROOM_API_URL || null;
 
 function startKeepAlive(baseUrl) {
-  if (_keepAliveMs <= 0) return;
-  if (_keepAliveTimer) { clearInterval(_keepAliveTimer); _keepAliveTimer = null; }
-  const https = require('https');
-  const pingUrl = `${baseUrl.replace(/\/$/, '')}/rooms`;
-  _keepAliveTimer = setInterval(() => {
-    const client = pingUrl.startsWith('https') ? https : http;
-    client.get(pingUrl, (res) => { res.resume(); }).on('error', () => {});
-  }, _keepAliveMs);
-  console.log(`Keep-alive: pinging ${pingUrl} every ${_keepAliveMs}ms`);
+  _startKeepAlive(baseUrl);
 }
 
 // Middleware: learn the pod's public URL from the first external request's Host header.
