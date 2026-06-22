@@ -5,6 +5,7 @@ const cors = require('cors');
 const { WebSocketServer } = require('ws');
 const roomsRouter = require('./routes/rooms');
 const gamesRouter = require('./routes/games');
+const themesRouter = require('./routes/themes');
 const { registerGameHandlers } = require('./game');
 
 const app = express();
@@ -129,6 +130,7 @@ app.use((req, _res, next) => {
 
 app.use('/rooms', roomsRouter);
 app.use('/games', gamesRouter);
+app.use('/themes', themesRouter);
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
