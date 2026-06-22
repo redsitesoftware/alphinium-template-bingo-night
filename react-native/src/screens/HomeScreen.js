@@ -13,6 +13,7 @@ export default function HomeScreen() {
   const [mode, setMode] = useState('home');
   const [name, setName] = useState('');
   const [themeId, setThemeId] = useState('office');
+  const [prize, setPrize] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [joinName, setJoinName] = useState('');
   const [dauber, setDauber] = useState(colors.daubers[0]);
@@ -21,7 +22,7 @@ export default function HomeScreen() {
 
   const handleHost = () => {
     storeDauber(dauber);
-    startAsHost(name.trim(), themeId);
+    startAsHost(name.trim(), themeId, prize.trim());
   };
 
   const handleJoin = () => {
@@ -60,6 +61,15 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            <Text style={s.label}>Prize (optional)</Text>
+            <TextInput
+              style={s.input}
+              placeholder="e.g. 🏆 Bottle of wine"
+              placeholderTextColor={colors.textMuted}
+              value={prize}
+              onChangeText={setPrize}
+            />
 
             <Text style={s.label}>Dauber colour</Text>
             <View style={s.dauberRow}>

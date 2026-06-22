@@ -3,7 +3,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Animated,
+  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Animated, Modal,
 } from 'react-native';
 import { useBingoStore } from '../store/bingoStore';
 import { colors, spacing, radius, typography } from '../theme';
@@ -92,7 +92,7 @@ export default function CardScreen() {
   const {
     card, marked, dauberColor, calledItems, isHost,
     sessionCode, playerName, themeId, isCalling, startAutoCalling, stopAutoCalling, resetGame,
-    ws,
+    ws, winner, dismissWinner,
   } = useBingoStore();
 
   const [currentCall, setCurrentCall] = useState('');
@@ -132,6 +132,21 @@ export default function CardScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
+      {winner && (
+        <Modal transparent animationType="fade">
+          <View style={s.modalBackdrop}>
+            <View style={s.winnerCard}>
+              <Text style={s.winnerEmoji}>🏆</Text>
+              <Text style={s.winnerName}>{winner.winnerName}</Text>
+              <Text style={s.winnerType}>{winner.winType}</Text>
+              {winner.prize ? <Text style={s.winnerPrize}>Prize: {winner.prize}</Text> : null}
+              <TouchableOpacity onPress={dismissWinner} style={s.winnerDismiss}>
+                <Text style={s.winnerDismissText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
       <ScrollView contentContainerStyle={s.content}>
         {/* Header */}
         <View style={s.header}>
@@ -295,4 +310,23 @@ const s = StyleSheet.create({
 
   resetBtn:       { alignItems: 'center', paddingVertical: spacing.md },
   resetBtnText:   { color: colors.textMuted, fontSize: 14 },
+
+  modalBackdrop:    {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
+    alignItems: 'center', justifyContent: 'center', padding: spacing.xl,
+  },
+  winnerCard:       {
+    backgroundColor: colors.card, borderRadius: radius.lg,
+    borderWidth: 2, borderColor: colors.primary,
+    padding: spacing.xxl, alignItems: 'center', width: '100%', maxWidth: 360,
+  },
+  winnerEmoji:      { fontSize: 56, marginBottom: spacing.md },
+  winnerName:       { ...typography.title, color: colors.text, textAlign: 'center', marginBottom: spacing.sm },
+  winnerType:       { fontSize: 16, color: colors.primary, fontWeight: '700', textAlign: 'center', marginBottom: spacing.sm },
+  winnerPrize:      { fontSize: 15, color: colors.textSub, textAlign: 'center', marginBottom: spacing.lg },
+  winnerDismiss:    {
+    marginTop: spacing.md, backgroundColor: colors.primary,
+    borderRadius: radius.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.xl,
+  },
+  winnerDismissText: { color: colors.black, fontSize: 16, fontWeight: '800' },
 });

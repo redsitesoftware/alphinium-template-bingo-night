@@ -141,6 +141,9 @@ export const useBingoStore = create((set, get) => ({
   isCalling: false,
   callInterval: null,
 
+  // Winner
+  winner: null,           // { winnerName, winType, prize } or null
+
   // WebSocket
   ws: null,
   wsConnected: false,
@@ -150,7 +153,9 @@ export const useBingoStore = create((set, get) => ({
   setDauber: (color) => set({ dauberColor: color }),
   setPlayerName: (name) => set({ playerName: name }),
 
-  startAsHost: (name, themeId) => {
+  dismissWinner: () => set({ winner: null }),
+
+  startAsHost: (name, themeId, prize = '') => {
     const code = Math.random().toString(36).substr(2, 4).toUpperCase();
     const card = generateCard(themeId);
     const pool = [...(CALLS_BY_THEME[themeId] || CALLS_BY_THEME.office)];
@@ -164,14 +169,16 @@ export const useBingoStore = create((set, get) => ({
       playerName: name,
       sessionCode: code,
       themeId,
+      prize: prize || '',
       card,
       marked: new Set([12]), // FREE center
       wins: [],
       calledItems: [],
       callQueue: pool,
       isCalling: false,
+      winner: null,
     });
-    get().connectWS(code, name);
+    get().connectWS(code, name, prize);
   },
 
   joinAsSpectator: (code) => {
@@ -208,7 +215,7 @@ export const useBingoStore = create((set, get) => ({
   },
 
   // WebSocket actions
-  connectWS: (code, playerName) => {
+  connectWS: (code, playerName, prize = '') => {
     const { ws: existing } = get();
     if (existing) {
       existing.onopen = null;
@@ -222,7 +229,7 @@ export const useBingoStore = create((set, get) => ({
     const ws = new WebSocket(`${WS_PROTOCOL}://${SERVER_HOST}/rooms`);
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'join-room', payload: { code, playerName } }));
+      ws.send(JSON.stringify({ type: 'join-room', payload: { code, playerName, prize } }));
       set({ wsConnected: true });
     };
 
@@ -256,6 +263,10 @@ export const useBingoStore = create((set, get) => ({
             callQueue: [],
             isCalling: false,
           });
+          break;
+
+        case 'winner-announced':
+          set({ winner: { winnerName: msg.winnerName, winType: msg.winType, prize: msg.prize } });
           break;
 
         default:
@@ -337,6 +348,7 @@ export const useBingoStore = create((set, get) => ({
       card: [],
       marked: new Set(),
       wins: [],
+      winner: null,
       calledItems: [],
       callQueue: [],
       isCalling: false,
