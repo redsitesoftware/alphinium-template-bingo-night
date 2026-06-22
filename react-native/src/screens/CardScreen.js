@@ -3,7 +3,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Animated,
+  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Animated, ActivityIndicator,
 } from 'react-native';
 import { useBingoStore } from '../store/bingoStore';
 import { colors, spacing, radius, typography } from '../theme';
@@ -95,6 +95,8 @@ export default function CardScreen() {
     ws,
   } = useBingoStore();
 
+  const isReconnecting = useBingoStore(s => s.isReconnecting ?? false);
+
   const [currentCall, setCurrentCall] = useState('');
   const [quip, setQuip] = useState('Eyes down — let\'s play Bingo! 🎱');
   const [quipIndex, setQuipIndex] = useState(0);
@@ -132,6 +134,12 @@ export default function CardScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
+      {isReconnecting && (
+        <View style={s.reconnectBanner}>
+          <ActivityIndicator size="small" color={colors.bg} style={s.reconnectSpinner} />
+          <Text style={s.reconnectText}>Reconnecting… Please wait</Text>
+        </View>
+      )}
       <ScrollView contentContainerStyle={s.content}>
         {/* Header */}
         <View style={s.header}>
@@ -295,4 +303,15 @@ const s = StyleSheet.create({
 
   resetBtn:       { alignItems: 'center', paddingVertical: spacing.md },
   resetBtnText:   { color: colors.textMuted, fontSize: 14 },
+
+  reconnectBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  reconnectSpinner: { marginRight: spacing.sm },
+  reconnectText:  { color: colors.bg, fontSize: 13, fontWeight: '700' },
 });
