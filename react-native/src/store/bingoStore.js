@@ -1,9 +1,20 @@
 /**
  * bingoStore.js — Bingo Night game state
- * Zustand store. Full 5x5 bingo card, AI caller simulation, dauber marking.
+ * Zustand store. Full 5x5 bingo card, WebSocket caller, dauber marking.
  */
 import { create } from 'zustand';
-import { RoomService } from '../services/RoomService';
+
+// In deployed (non-localhost) browser environments, fall back to the page's own origin
+// so that WS connections work even when EXPO_PUBLIC_WS_HOST was not injected at build time.
+const _envHost = process.env.EXPO_PUBLIC_WS_HOST;
+const SERVER_HOST = _envHost ||
+  (typeof window !== 'undefined' &&
+   !window.location.hostname.startsWith('localhost') &&
+   !window.location.hostname.startsWith('127.')
+    ? window.location.host
+    : 'localhost:3001');
+// Use secure WebSocket for non-localhost hosts (deployed pods run behind HTTPS)
+const WS_PROTOCOL = (SERVER_HOST.startsWith('localhost') || SERVER_HOST.startsWith('127.')) ? 'ws' : 'wss';
 
 // --- Themed bingo call sets ---
 export const THEMES = [
@@ -117,7 +128,6 @@ export const useBingoStore = create((set, get) => ({
   playerName: '',
   sessionCode: '',
   isHost: false,
-  roomError: null,        // null | string — API error message for UI display
 
   // Card
   card: [],               // 25 strings
@@ -130,70 +140,133 @@ export const useBingoStore = create((set, get) => ({
   isCalling: false,
   callInterval: null,
 
+  // WebSocket
+  ws: null,
+  wsConnected: false,
+
   // Actions
   setTheme: (themeId) => set({ themeId }),
   setDauber: (color) => set({ dauberColor: color }),
   setPlayerName: (name) => set({ playerName: name }),
 
-  startAsHost: async (name, themeId) => {
-    set({ roomError: null });
-    try {
-      const room = await RoomService.createRoom(name, themeId);
-      const code = room.code;
-      const card = generateCard(themeId);
-      const pool = [...(CALLS_BY_THEME[themeId] || CALLS_BY_THEME.office)];
-      for (let i = pool.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [pool[i], pool[j]] = [pool[j], pool[i]];
-      }
-      set({
-        phase: 'card',
-        isHost: true,
-        playerName: name,
-        sessionCode: code,
-        themeId,
-        card,
-        marked: new Set([12]), // FREE center
-        wins: [],
-        calledItems: [],
-        callQueue: pool,
-        isCalling: false,
-      });
-    } catch (err) {
-      set({ roomError: err.message || 'Failed to create room' });
+  startAsHost: (name, themeId) => {
+    const code = Math.random().toString(36).substr(2, 4).toUpperCase();
+    const card = generateCard(themeId);
+    const pool = [...(CALLS_BY_THEME[themeId] || CALLS_BY_THEME.office)];
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
     }
+    set({
+      phase: 'card',
+      isHost: true,
+      playerName: name,
+      sessionCode: code,
+      themeId,
+      card,
+      marked: new Set([12]), // FREE center
+      wins: [],
+      calledItems: [],
+      callQueue: pool,
+      isCalling: false,
+    });
+    get().connectWS(code, name);
   },
 
-  joinAsPlayer: async (code, name, themeId) => {
-    set({ roomError: null });
-    try {
-      await RoomService.joinRoom(code, name);
-      const card = generateCard(themeId);
-      set({
-        phase: 'card',
-        isHost: false,
-        playerName: name,
-        sessionCode: code.toUpperCase(),
-        themeId,
-        card,
-        marked: new Set([12]),
-        wins: [],
-        calledItems: [],
-        callQueue: [],
-        roomError: null,
-      });
-    } catch (err) {
-      const status = err.status;
-      let message;
-      if (status === 404) {
-        message = 'Room not found. Check your code and try again.';
-      } else if (status === 409) {
-        message = 'That name is already taken in this room. Try a different name.';
-      } else {
-        message = err.message || 'Failed to join room';
-      }
-      set({ roomError: message });
+  joinAsPlayer: (code, name, themeId) => {
+    const card = generateCard(themeId);
+    set({
+      phase: 'card',
+      isHost: false,
+      playerName: name,
+      sessionCode: code.toUpperCase(),
+      themeId,
+      card,
+      marked: new Set([12]),
+      wins: [],
+      calledItems: [],
+      callQueue: [],
+    });
+    get().connectWS(code.toUpperCase(), name);
+  },
+
+  // WebSocket actions
+  connectWS: (code, playerName) => {
+    const { ws: existing } = get();
+    if (existing) {
+      existing.onopen = null;
+      existing.onmessage = null;
+      existing.onclose = null;
+      existing.onerror = null;
+      existing.close();
     }
+
+    // Connect via /rooms — nginx proxies this path to the Node.js server in both single and two-pod mode
+    const ws = new WebSocket(`${WS_PROTOCOL}://${SERVER_HOST}/rooms`);
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'join-room', payload: { code, playerName } }));
+      set({ wsConnected: true });
+    };
+
+    ws.onmessage = (event) => {
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      switch (msg.type) {
+        case 'room-state':
+          set({
+            calledItems: msg.calledItems ?? [],
+            callQueue: msg.callQueue ?? [],
+          });
+          break;
+
+        case 'number-called':
+          set({
+            calledItems: msg.calledItems ?? [...get().calledItems, msg.item],
+            callQueue: Array(msg.callQueueLength ?? 0).fill(null),
+          });
+          break;
+
+        case 'game-ended':
+          set({
+            phase: 'ended',
+            calledItems: msg.calledItems ?? get().calledItems,
+            callQueue: [],
+            isCalling: false,
+          });
+          break;
+
+        default:
+          break;
+      }
+    };
+
+    ws.onclose = () => {
+      set({ wsConnected: false });
+    };
+
+    ws.onerror = () => {
+      set({ wsConnected: false });
+    };
+
+    set({ ws });
+  },
+
+  disconnectWS: () => {
+    const { ws } = get();
+    if (ws) {
+      ws.onopen = null;
+      ws.onmessage = null;
+      ws.onclose = null;
+      ws.onerror = null;
+      ws.close();
+    }
+    set({ ws: null, wsConnected: false });
   },
 
   // Daub a square
@@ -240,15 +313,17 @@ export const useBingoStore = create((set, get) => ({
 
   continueAfterWin: () => set({ phase: 'calling' }),
 
-  resetGame: () => set({
-    phase: 'home',
-    card: [],
-    marked: new Set(),
-    wins: [],
-    calledItems: [],
-    callQueue: [],
-    isCalling: false,
-    sessionCode: '',
-    roomError: null,
-  }),
+  resetGame: () => {
+    get().disconnectWS();
+    set({
+      phase: 'home',
+      card: [],
+      marked: new Set(),
+      wins: [],
+      calledItems: [],
+      callQueue: [],
+      isCalling: false,
+      sessionCode: '',
+    });
+  },
 }));

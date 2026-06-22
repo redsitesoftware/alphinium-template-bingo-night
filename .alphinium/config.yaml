@@ -20,8 +20,8 @@ pods:
         description: "Enabled OAuth providers (e.g. google,email). Defaults to google,email"
       - name: EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY
         description: "Stripe publishable key for payment features (optional)"
-      - name: EXPO_PUBLIC_ROOM_API_URL
-        description: "Server pod public URL (e.g. https://...-server.user-pods.alphinium.io). REQUIRED in two-pod deployments: nginx proxies /rooms to this URL and pings it every 50s to prevent the server pod from expiring. Leave blank for single-pod local dev (embedded Node.js is used instead)."
+      - name: EXPO_PUBLIC_WS_HOST
+        description: "WebSocket game server host (no protocol prefix, e.g. server.myapp.pods.alphinium.io). Defaults to localhost:3001 for local dev."
 
   - name: server
     dockerfile: server/Dockerfile
@@ -31,8 +31,3 @@ pods:
       path: /health
       interval_seconds: 30
       timeout_seconds: 10
-    env_vars:
-      - name: FRONTEND_ORIGIN
-        description: "CORS allowed origin — set to the app pod URL (e.g. https://...-preview-N-XXXX.user-pods.alphinium.io). Leave blank to allow all origins."
-      - name: SERVER_SELF_URL
-        description: "This pod's own public URL (e.g. https://...-server.user-pods.alphinium.io). Used by the self-ping keep-alive so the pod stays alive from boot. If not set, the URL is auto-detected from the first incoming request — optional but recommended."
