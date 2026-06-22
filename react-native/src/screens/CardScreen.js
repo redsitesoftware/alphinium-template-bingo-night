@@ -93,7 +93,7 @@ export default function CardScreen() {
     card, marked, dauberColor, calledItems, isHost,
     sessionCode, playerName, themeId, isCalling, callerInterval,
     startAutoCalling, stopAutoCalling, resetGame,
-    ws, audioMuted,
+    ws,
   } = useBingoStore();
   const toggleAudioMuted = useBingoStore(s => s.toggleAudioMuted);
 
