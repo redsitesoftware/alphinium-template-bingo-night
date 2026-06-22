@@ -91,7 +91,8 @@ function BingoSquare({ item, index, isMarked, isLatest, dauberColor, onPress }) 
 export default function CardScreen() {
   const {
     card, marked, dauberColor, calledItems, isHost,
-    sessionCode, playerName, themeId, isCalling, startAutoCalling, stopAutoCalling, resetGame,
+    sessionCode, playerName, themeId, isCalling, callerInterval,
+    startAutoCalling, stopAutoCalling, resetGame,
     ws, audioMuted,
   } = useBingoStore();
   const toggleAudioMuted = useBingoStore(s => s.toggleAudioMuted);
@@ -101,6 +102,8 @@ export default function CardScreen() {
   const [currentCall, setCurrentCall] = useState('');
   const [quip, setQuip] = useState('Eyes down — let\'s play Bingo! 🎱');
   const [quipIndex, setQuipIndex] = useState(0);
+  const [selectedInterval, setSelectedInterval] = useState(10);
+  const [countdown, setCountdown] = useState(null);
   const daubeSquare = useBingoStore(s => s.daubeSquare);
   const wins = useBingoStore(s => s.wins);
 
@@ -112,7 +115,26 @@ export default function CardScreen() {
     const quips = HOST_QUIPS[themeId] || HOST_QUIPS.classic;
     setQuip(quips[quipIndex % quips.length]);
     setQuipIndex(i => i + 1);
+    // Reset countdown to full interval on each new call
+    if (isCalling) setCountdown(callerInterval);
   }, [calledItems.length]);
+
+  // Countdown timer: start/stop based on isCalling
+  useEffect(() => {
+    if (!isCalling) {
+      setCountdown(null);
+      return;
+    }
+    setCountdown(callerInterval);
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev === null) return null;
+        if (prev <= 1) return callerInterval; // wrap back (server will call next)
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isCalling, callerInterval]);
 
   // Auto-calling: tell the server to start/stop
   const handleAutoCallerToggle = () => {
@@ -121,9 +143,15 @@ export default function CardScreen() {
       ws.send(JSON.stringify({ type: 'stop-auto-caller', payload: { code: sessionCode } }));
       stopAutoCalling();
     } else {
-      ws.send(JSON.stringify({ type: 'start-auto-caller', payload: { code: sessionCode, interval: 4 } }));
+      ws.send(JSON.stringify({ type: 'start-auto-caller', payload: { code: sessionCode, interval: selectedInterval } }));
       startAutoCalling();
     }
+  };
+
+  const handleSkip = () => {
+    if (!ws) return;
+    ws.send(JSON.stringify({ type: 'skip-call', payload: { code: sessionCode } }));
+    setCountdown(callerInterval);
   };
 
   const handleManualCall = () => {
@@ -173,6 +201,9 @@ export default function CardScreen() {
               <Text style={s.quipText}>{isHost ? 'Press Call Next to start' : 'Waiting for the caller...'}</Text>
             </>
           )}
+          {isCalling && countdown !== null && (
+            <Text style={s.countdownText}>Next call in {countdown}s</Text>
+          )}
         </View>
 
         {/* Bingo Card */}
@@ -216,15 +247,37 @@ export default function CardScreen() {
 
         {/* Host controls */}
         {isHost && (
-          <View style={s.controls}>
-            <TouchableOpacity style={s.callBtn} onPress={handleManualCall} disabled={isCalling || !ws}>
-              <Text style={s.callBtnText}>Call Next</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[s.autoBtn, isCalling && s.autoBtnActive]}
-              onPress={handleAutoCallerToggle}>
-              <Text style={s.autoBtnText}>{isCalling ? '⏸ Pause Auto' : '▶ Auto Call'}</Text>
-            </TouchableOpacity>
+          <View style={s.hostControls}>
+            {/* Interval picker — shown always, disabled while calling */}
+            <View style={s.intervalRow}>
+              <Text style={s.intervalLabel}>Interval:</Text>
+              {[5, 10, 15, 20, 30, 60].map(sec => (
+                <TouchableOpacity
+                  key={sec}
+                  onPress={() => setSelectedInterval(sec)}
+                  disabled={isCalling}
+                  style={[s.intervalChip, selectedInterval === sec && s.intervalChipActive, isCalling && s.intervalChipDisabled]}>
+                  <Text style={[s.intervalChipText, selectedInterval === sec && s.intervalChipTextActive]}>{sec}s</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Call buttons row */}
+            <View style={s.controls}>
+              <TouchableOpacity style={s.callBtn} onPress={handleManualCall} disabled={isCalling || !ws}>
+                <Text style={s.callBtnText}>Call Next</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.autoBtn, isCalling && s.autoBtnActive]}
+                onPress={handleAutoCallerToggle}>
+                <Text style={s.autoBtnText}>{isCalling ? '⏸ Pause Auto' : '▶ Auto Call'}</Text>
+              </TouchableOpacity>
+              {isCalling && (
+                <TouchableOpacity style={s.skipBtn} onPress={handleSkip}>
+                  <Text style={s.skipBtnText}>⏭ Skip</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         )}
 
@@ -309,6 +362,26 @@ const s = StyleSheet.create({
   },
   autoBtnActive:  { backgroundColor: colors.accent + '33', borderColor: colors.accent },
   autoBtnText:    { color: colors.primary, fontSize: 13, fontWeight: '700' },
+
+  hostControls:   { marginBottom: spacing.md },
+  intervalRow:    { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.sm },
+  intervalLabel:  { fontSize: 12, color: colors.textMuted, marginRight: 4 },
+  intervalChip:   {
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: radius.sm, borderWidth: 1, borderColor: colors.cardBorder,
+    backgroundColor: colors.card,
+  },
+  intervalChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  intervalChipDisabled: { opacity: 0.4 },
+  intervalChipText:   { fontSize: 12, color: colors.textSub, fontWeight: '600' },
+  intervalChipTextActive: { color: colors.black },
+  skipBtn:        {
+    backgroundColor: colors.surface, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.accent,
+    padding: spacing.md, alignItems: 'center', justifyContent: 'center',
+  },
+  skipBtnText:    { color: colors.accent, fontSize: 13, fontWeight: '700' },
+  countdownText:  { fontSize: 12, color: colors.textMuted, marginTop: 6, fontWeight: '600' },
 
   resetBtn:       { alignItems: 'center', paddingVertical: spacing.md },
   resetBtnText:   { color: colors.textMuted, fontSize: 14 },
