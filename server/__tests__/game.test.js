@@ -219,7 +219,7 @@ describe('call-number', () => {
 // ─── auto-caller ─────────────────────────────────────────────────────────────
 
 describe('auto-caller', () => {
-  it('start-auto-caller causes number-called events to arrive at approximately the right interval', async () => {
+  it('start-auto-caller broadcasts caller-state with isCalling:true and the resolved interval', async () => {
     const room = createRoom('Host', 'office');
     const host = createTestClient();
     await host.connected();
@@ -227,24 +227,18 @@ describe('auto-caller', () => {
     host.send({ type: 'join-room', payload: { code: room.code, playerName: 'Host' } });
     await host.nextMessage(); // room-state
 
-    const intervalSec = 0.1; // 100 ms
-    host.send({ type: 'start-auto-caller', payload: { code: room.code, interval: intervalSec } });
+    host.send({ type: 'start-auto-caller', payload: { code: room.code, interval: 10 } });
+    const msg = await host.nextMessage(2000);
 
-    const t0 = Date.now();
-    const msg1 = await host.nextMessage(1000);
-    const msg2 = await host.nextMessage(1000);
-    const elapsed = Date.now() - t0;
-
-    expect(msg1.type).toBe('number-called');
-    expect(msg2.type).toBe('number-called');
-    // Two events should arrive within a reasonable window around 2 × interval
-    expect(elapsed).toBeGreaterThan(intervalSec * 1000 * 0.5);
-    expect(elapsed).toBeLessThan(intervalSec * 1000 * 10);
+    expect(msg.type).toBe('caller-state');
+    expect(msg.isCalling).toBe(true);
+    expect(msg.callerInterval).toBe(10);
+    expect(room.isCalling).toBe(true);
+    expect(room.callerInterval).toBe(10);
   });
 
-  it('stop-auto-caller halts number-called events', async () => {
+  it('stop-auto-caller broadcasts caller-state with isCalling:false and halts calling', async () => {
     const room = createRoom('Host', 'office');
-    // Use a short queue so we can control when the game ends
     room.callQueue = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
     room.calledItems = [];
 
@@ -254,24 +248,173 @@ describe('auto-caller', () => {
     host.send({ type: 'join-room', payload: { code: room.code, playerName: 'Host' } });
     await host.nextMessage(); // room-state
 
-    host.send({ type: 'start-auto-caller', payload: { code: room.code, interval: 0.1 } });
-
-    // Consume at least 2 number-called events
-    await host.nextMessage(1000);
-    await host.nextMessage(1000);
+    host.send({ type: 'start-auto-caller', payload: { code: room.code, interval: 10 } });
+    await host.nextMessage(2000); // caller-state (isCalling: true)
 
     host.send({ type: 'stop-auto-caller', payload: { code: room.code } });
+    const stopMsg = await host.nextMessage(2000);
 
-    // Drain any in-flight message (one more may already be queued)
-    try { await host.nextMessage(200); } catch { /* expected timeout */ }
+    expect(stopMsg.type).toBe('caller-state');
+    expect(stopMsg.isCalling).toBe(false);
+    expect(room.isCalling).toBe(false);
 
     const calledCountAfterStop = room.calledItems.length;
-
-    // Wait 5× the interval — no new calls should be made
     await wait(500);
-
     expect(room.calledItems.length).toBe(calledCountAfterStop);
-    expect(room.isCalling).toBe(false);
+  });
+});
+
+// ─── interval validation ──────────────────────────────────────────────────────
+
+describe('interval validation', () => {
+  async function startAndGetCallerState(room, interval) {
+    const host = createTestClient();
+    await host.connected();
+    host.send({ type: 'join-room', payload: { code: room.code, playerName: 'Host' } });
+    await host.nextMessage(); // room-state
+    host.send({ type: 'start-auto-caller', payload: { code: room.code, interval } });
+    const msg = await host.nextMessage(2000);
+    return { host, msg };
+  }
+
+  it('interval below 5 is clamped to 5', async () => {
+    const room = createRoom('Host', 'office');
+    const { msg } = await startAndGetCallerState(room, 3);
+
+    expect(msg.type).toBe('caller-state');
+    expect(msg.callerInterval).toBe(5);
+    expect(room.callerInterval).toBe(5);
+  });
+
+  it('interval above 60 is clamped to 60', async () => {
+    const room = createRoom('Host', 'office');
+    const { msg } = await startAndGetCallerState(room, 120);
+
+    expect(msg.type).toBe('caller-state');
+    expect(msg.callerInterval).toBe(60);
+    expect(room.callerInterval).toBe(60);
+  });
+
+  it('valid interval within 5–60 is preserved exactly', async () => {
+    const room = createRoom('Host', 'office');
+    const { msg } = await startAndGetCallerState(room, 15);
+
+    expect(msg.type).toBe('caller-state');
+    expect(msg.callerInterval).toBe(15);
+    expect(room.callerInterval).toBe(15);
+  });
+
+  it('missing interval falls back to room.callerInterval', async () => {
+    const room = createRoom('Host', 'office');
+    room.callerInterval = 20;
+
+    const host = createTestClient();
+    await host.connected();
+    host.send({ type: 'join-room', payload: { code: room.code, playerName: 'Host' } });
+    await host.nextMessage(); // room-state
+
+    // Send start-auto-caller with no interval field
+    host.send({ type: 'start-auto-caller', payload: { code: room.code } });
+    const msg = await host.nextMessage(2000);
+
+    expect(msg.type).toBe('caller-state');
+    expect(msg.callerInterval).toBe(20);
+  });
+});
+
+// ─── skip-call ───────────────────────────────────────────────────────────────
+
+describe('skip-call', () => {
+  it('skip-call fires number-called immediately and resets the timer (broadcasts caller-state)', async () => {
+    const room = createRoom('Host', 'office');
+    room.callQueue = ['A', 'B', 'C', 'D', 'E'];
+    room.calledItems = [];
+
+    const host = createTestClient();
+    const guest = createTestClient();
+    await host.connected();
+    await guest.connected();
+
+    host.send({ type: 'join-room', payload: { code: room.code, playerName: 'Host' } });
+    await host.nextMessage(); // room-state
+
+    guest.send({ type: 'join-room', payload: { code: room.code, playerName: 'Guest' } });
+    await host.nextMessage(); // room-state broadcast
+    await guest.nextMessage(); // room-state
+
+    // Start auto-caller
+    host.send({ type: 'start-auto-caller', payload: { code: room.code, interval: 10 } });
+    await host.nextMessage(2000); // caller-state (isCalling: true)
+    await guest.nextMessage(2000); // caller-state (isCalling: true)
+
+    const calledBefore = room.calledItems.length;
+
+    // skip-call: should immediately fire number-called to all clients, then caller-state
+    host.send({ type: 'skip-call', payload: { code: room.code } });
+
+    const [hostNum, guestNum] = await Promise.all([
+      host.nextMessage(2000),
+      guest.nextMessage(2000),
+    ]);
+    expect(hostNum.type).toBe('number-called');
+    expect(guestNum.type).toBe('number-called');
+    expect(room.calledItems.length).toBe(calledBefore + 1);
+
+    // caller-state should follow (timer was reset)
+    const [hostState, guestState] = await Promise.all([
+      host.nextMessage(2000),
+      guest.nextMessage(2000),
+    ]);
+    expect(hostState.type).toBe('caller-state');
+    expect(hostState.isCalling).toBe(true);
+    expect(guestState.type).toBe('caller-state');
+    expect(guestState.isCalling).toBe(true);
+  });
+
+  it('skip-call without active auto-caller fires number-called but does not send caller-state', async () => {
+    const room = createRoom('Host', 'office');
+    room.callQueue = ['A', 'B', 'C'];
+    room.calledItems = [];
+
+    const host = createTestClient();
+    await host.connected();
+    host.send({ type: 'join-room', payload: { code: room.code, playerName: 'Host' } });
+    await host.nextMessage(); // room-state
+
+    // skip-call when auto-caller is NOT running
+    host.send({ type: 'skip-call', payload: { code: room.code } });
+    const msg = await host.nextMessage(2000);
+
+    expect(msg.type).toBe('number-called');
+    expect(room.calledItems).toHaveLength(1);
+
+    // No caller-state should follow
+    await expect(host.nextMessage(300)).rejects.toThrow('timeout');
+  });
+
+  it('non-host skip-call receives error and does not trigger a call', async () => {
+    const room = createRoom('Host', 'office');
+    room.callQueue = ['A', 'B', 'C'];
+    room.calledItems = [];
+
+    const host = createTestClient();
+    const nonHost = createTestClient();
+    await host.connected();
+    await nonHost.connected();
+
+    host.send({ type: 'join-room', payload: { code: room.code, playerName: 'Host' } });
+    await host.nextMessage(); // room-state
+
+    nonHost.send({ type: 'join-room', payload: { code: room.code, playerName: 'Guest' } });
+    await host.nextMessage(); // room-state broadcast
+    await nonHost.nextMessage(); // room-state
+
+    nonHost.send({ type: 'skip-call', payload: { code: room.code } });
+    const errorMsg = await nonHost.nextMessage(2000);
+
+    expect(errorMsg.type).toBe('error');
+    expect(errorMsg.message).toMatch(/host/i);
+    expect(room.calledItems).toHaveLength(0);
   });
 });
 
@@ -350,8 +493,8 @@ describe('disconnect', () => {
     host.send({ type: 'join-room', payload: { code: room.code, playerName: 'Host' } });
     await host.nextMessage(); // room-state
 
-    host.send({ type: 'start-auto-caller', payload: { code: room.code, interval: 0.1 } });
-    await host.nextMessage(1000); // first number-called
+    host.send({ type: 'start-auto-caller', payload: { code: room.code, interval: 10 } });
+    await host.nextMessage(2000); // caller-state (isCalling: true)
 
     expect(room.isCalling).toBe(true);
 
