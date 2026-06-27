@@ -104,3 +104,4 @@ if (require.main === module) {
 
 module.exports = app;
 
+// feat: host can view room history on dashboard
