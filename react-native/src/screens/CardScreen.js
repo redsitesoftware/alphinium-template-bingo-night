@@ -99,6 +99,8 @@ export default function CardScreen() {
 
   const isReconnecting = useBingoStore(s => s.isReconnecting ?? false);
 
+  const isReconnecting = useBingoStore(s => s.isReconnecting ?? false);
+
   const [currentCall, setCurrentCall] = useState('');
   const [quip, setQuip] = useState('Eyes down — let\'s play Bingo! 🎱');
   const [quipIndex, setQuipIndex] = useState(0);
