@@ -104,3 +104,4 @@ if (require.main === module) {
 
 module.exports = app;
 
+// feat: add in-game chat sidebar for players
