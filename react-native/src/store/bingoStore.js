@@ -153,12 +153,43 @@ export const useBingoStore = create((set, get) => ({
     set({ audioMuted: next });
   },
 
+  fetchThemes: async () => {
+    set({ themesLoading: true });
+    try {
+      const res = await fetch(THEMES_API_URL);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) set({ themes: data });
+      }
+    } catch {
+      // keep FALLBACK_THEMES
+    } finally {
+      set({ themesLoading: false });
+    }
+  },
+
   dismissWinner: () => set({ winner: null }),
 
   startAsHost: async (name, themeId, prize = '') => {
-    const code = Math.random().toString(36).substr(2, 4).toUpperCase();
     const calls = (await fetchThemeCalls(themeId)) || _FALLBACK_CALLS.office;
     const card = generateCard(calls);
+    // Create room on server first; use server-assigned code
+    let code;
+    try {
+      const res = await fetch(`${HTTP_PROTOCOL}://${SERVER_HOST}/rooms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostName: name, themeId, prize }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        code = data.code;
+      }
+    } catch { /* fall through to local fallback */ }
+    if (!code) {
+      // Fallback: local code if server unreachable (offline play)
+      code = Math.random().toString(36).substr(2, 6).toUpperCase();
+    }
     set({
       phase: 'card',
       isHost: true,

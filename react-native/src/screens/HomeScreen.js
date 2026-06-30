@@ -113,10 +113,7 @@ export default function HomeScreen() {
               placeholderTextColor={colors.textMuted}
               value={spectateCode}
               onChangeText={t => setSpectateCode(t.toUpperCase())}
-              maxLength={4}
-              autoCapitalize="characters"
-              autoFocus
-            />
+              maxLength={6}
 
             <TouchableOpacity
               style={[s.btn, s.btnSpectate, !spectateCode.trim() && s.btnDisabled]}
@@ -148,9 +145,9 @@ export default function HomeScreen() {
             <Text style={s.sub}>Enter the room code from your caller</Text>
 
             <Text style={s.label}>Room code</Text>
-            <TextInput style={[s.input, s.codeInput]} placeholder="e.g. B4NG"
+            <TextInput style={[s.input, s.codeInput]} placeholder="e.g. A1B2C3"
               placeholderTextColor={colors.textMuted} value={joinCode}
-              onChangeText={t => setJoinCode(t.toUpperCase())} maxLength={4}
+              onChangeText={t => setJoinCode(t.toUpperCase())} maxLength={6}
               autoCapitalize="characters" autoFocus />
 
             <Text style={s.label}>Your name</Text>

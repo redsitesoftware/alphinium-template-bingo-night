@@ -7,6 +7,7 @@
 
 const { getRoom, addClient, removeClient, broadcastToRoom, nextCall, getRoomState, getPlayer, getPlayerCard, savePlayerCard } = require('./rooms');
 const { saveGame } = require('./gameHistory');
+const { validateClaim } = require('./winLogic');
 
 /** @type {Map<string, ReturnType<typeof setInterval>>} */
 const autoCallers = new Map();
@@ -211,6 +212,40 @@ function registerGameHandlers(wss) {
             const newTimerId = setInterval(() => callNumber(code), intervalSec * 1000);
             autoCallers.set(code, newTimerId);
             broadcastToRoom(code, { type: 'caller-state', isCalling: true, callerInterval: intervalSec });
+          }
+          break;
+        }
+
+        case 'claim-bingo': {
+          const code = payload.code?.toUpperCase();
+          const claimType = payload.claimType; // 'line' or 'full-house'
+          const room = getRoom(code);
+          if (!room) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Room not found' }));
+            return;
+          }
+          const player = getPlayer(code, playerName);
+          const card = player?.card;
+          if (!card) {
+            ws.send(JSON.stringify({ type: 'error', message: 'No card found — save your card first' }));
+            return;
+          }
+          // Card saved as flat 25-element array; validateClaim expects 5x5 grid
+          const grid = Array.isArray(card[0])
+            ? card
+            : [card.slice(0,5), card.slice(5,10), card.slice(10,15), card.slice(15,20), card.slice(20,25)];
+          const result = validateClaim(grid, room.calledItems, claimType || 'line');
+          if (result.valid) {
+            if (!room.winners) room.winners = [];
+            room.winners.push({ playerName, winType: claimType, pattern: result.pattern });
+            broadcastToRoom(code, {
+              type: 'winner-announced',
+              winnerName: playerName,
+              winType: claimType,
+              prize: room.prize || '',
+            });
+          } else {
+            ws.send(JSON.stringify({ type: 'claim-rejected', message: 'Claim not valid' }));
           }
           break;
         }

@@ -10,6 +10,15 @@ router.get('/', (_req, res) => {
   res.json(listThemes());
 });
 
+// GET /themes/:id — get a single theme including its calls array (used by client card generation)
+router.get('/:id', (req, res) => {
+  const theme = getTheme(req.params.id);
+  if (!theme) {
+    return res.status(404).json({ error: `Theme '${req.params.id}' not found` });
+  }
+  return res.json(theme);
+});
+
 // POST /themes — register a custom word-list theme
 //
 // TODO: production deployments should add admin auth middleware before this
