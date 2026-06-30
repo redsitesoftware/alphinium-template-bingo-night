@@ -133,9 +133,6 @@ export const useBingoStore = create((set, get) => ({
   callInterval: null,
   callerInterval: 10,     // seconds between auto-calls (synced from server)
 
-  // Audio
-  audioMuted: loadAudioMuted(),
-
   // WebSocket
   ws: null,
   wsConnected: false,
@@ -265,8 +262,6 @@ export const useBingoStore = create((set, get) => ({
             callQueue: msg.callQueue ?? [],
             isCalling: msg.isCalling ?? get().isCalling,
             callerInterval: msg.callerInterval ?? get().callerInterval,
-            // Restore card from server on reconnect path; keep local card otherwise
-            ...(msg.playerCard && msg.playerCard.length > 0 ? { card: msg.playerCard } : {}),
           });
           break;
 
@@ -274,8 +269,7 @@ export const useBingoStore = create((set, get) => ({
           set({ isCalling: msg.isCalling, callerInterval: msg.callerInterval });
           break;
 
-        case 'number-called': {
-          const newItem = msg.item;
+        case 'number-called':
           set({
             calledItems: msg.calledItems ?? [...get().calledItems, newItem],
             callQueue: Array(msg.callQueueLength ?? 0).fill(null),
