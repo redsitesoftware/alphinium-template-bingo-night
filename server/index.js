@@ -104,4 +104,4 @@ if (require.main === module) {
 
 module.exports = app;
 
-// feat: add max-players cap and waiting room queue
+// feat: QR code room join for mobile players
