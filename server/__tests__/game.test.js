@@ -503,4 +503,68 @@ describe('disconnect', () => {
 
     expect(room.isCalling).toBe(false);
   });
+
+  it('player disconnecting sets disconnectedAt on their room entry and broadcasts player-disconnected', async () => {
+    const room = createRoom('Host', 'office');
+    const host = createTestClient();
+    const guest = createTestClient();
+    await host.connected();
+    await guest.connected();
+
+    host.send({ type: 'join-room', payload: { code: room.code, playerName: 'Host' } });
+    await host.nextMessage(); // room-state
+
+    guest.send({ type: 'join-room', payload: { code: room.code, playerName: 'Bob' } });
+    await host.nextMessage(); // room-state broadcast
+    await guest.nextMessage(); // room-state
+
+    await guest.close();
+    await wait(100); // allow close handler to fire
+
+    // Host should receive player-disconnected broadcast
+    const msg = await host.nextMessage(500);
+    expect(msg.type).toBe('player-disconnected');
+    expect(msg.playerName).toBe('Bob');
+
+    // Player entry should have disconnectedAt set
+    const player = room.players.find(p => p.name === 'Bob');
+    expect(player).toBeDefined();
+    expect(player.disconnectedAt).toBeInstanceOf(Date);
+  });
+
+  it('reconnecting player clears disconnectedAt and broadcasts player-reconnected', async () => {
+    const room = createRoom('Host', 'office');
+    const host = createTestClient();
+    let guest = createTestClient();
+    await host.connected();
+    await guest.connected();
+
+    host.send({ type: 'join-room', payload: { code: room.code, playerName: 'Host' } });
+    await host.nextMessage(); // room-state
+
+    guest.send({ type: 'join-room', payload: { code: room.code, playerName: 'Bob' } });
+    await host.nextMessage(); // room-state
+    await guest.nextMessage(); // room-state
+
+    // Bob disconnects
+    await guest.close();
+    await wait(100);
+    await host.nextMessage(500); // consume player-disconnected
+
+    // Bob reconnects with a new WebSocket
+    guest = createTestClient();
+    await guest.connected();
+    guest.send({ type: 'join-room', payload: { code: room.code, playerName: 'Bob' } });
+
+    // Both host and guest should receive player-reconnected, then room-state
+    const msgs = await Promise.all([host.nextMessage(500), guest.nextMessage(500)]);
+    const reconnectedMsgs = msgs.filter(m => m.type === 'player-reconnected');
+    expect(reconnectedMsgs).toHaveLength(2);
+    expect(reconnectedMsgs[0].playerName).toBe('Bob');
+
+    // Player entry should no longer have disconnectedAt
+    const player = room.players.find(p => p.name === 'Bob');
+    expect(player).toBeDefined();
+    expect(player.disconnectedAt).toBeUndefined();
+  });
 });
