@@ -114,6 +114,7 @@ export default function HomeScreen() {
               value={spectateCode}
               onChangeText={t => setSpectateCode(t.toUpperCase())}
               maxLength={6}
+            />
 
             <TouchableOpacity
               style={[s.btn, s.btnSpectate, !spectateCode.trim() && s.btnDisabled]}
