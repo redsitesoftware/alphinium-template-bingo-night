@@ -105,3 +105,4 @@ if (require.main === module) {
 module.exports = app;
 
 // feat: QR code room join for mobile players
+// feat: add customisable sound pack selector (classic/modern/silent)
