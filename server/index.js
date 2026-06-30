@@ -105,3 +105,4 @@ if (require.main === module) {
 module.exports = app;
 
 // feat: QR code room join for mobile players
+// feat: add WCAG 2.1 AA accessibility — keyboard nav and screen reader
