@@ -105,3 +105,4 @@ if (require.main === module) {
 module.exports = app;
 
 // feat: QR code room join for mobile players
+// feat: share bingo card as image after game ends
