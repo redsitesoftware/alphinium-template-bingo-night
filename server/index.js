@@ -105,3 +105,4 @@ if (require.main === module) {
 module.exports = app;
 
 // feat: QR code room join for mobile players
+// feat: post-game replay shows sequence of calls and winner path
