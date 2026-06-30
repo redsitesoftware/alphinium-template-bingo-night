@@ -71,10 +71,6 @@ app.use((req, _res, next) => {
   next();
 });
 
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' });
-});
-
 app.use('/rooms', roomsRouter);
 app.use('/games', gamesRouter);
 app.use('/audio', audioRouter);
@@ -103,5 +99,3 @@ if (require.main === module) {
 }
 
 module.exports = app;
-
-// feat: QR code room join for mobile players

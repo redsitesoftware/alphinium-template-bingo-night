@@ -116,6 +116,8 @@ export const useBingoStore = create((set, get) => ({
   sessionCode: '',
   isHost: false,
   isSpectator: false,
+  audioMuted: loadAudioMuted(),
+  _reconnectDelay: 1000,
 
   // Themes (fetched from server)
   themes: FALLBACK_THEMES,
@@ -153,17 +155,7 @@ export const useBingoStore = create((set, get) => ({
 
   dismissWinner: () => set({ winner: null }),
 
-  startAsHost: (name, themeId, prize = '') => {
-    const code = Math.random().toString(36).substr(2, 4).toUpperCase();
-    const card = generateCard(themeId);
-    const pool = [...(CALLS_BY_THEME[themeId] || CALLS_BY_THEME.office)];
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-  },
-
-  startAsHost: async (name, themeId) => {
+  startAsHost: async (name, themeId, prize = '') => {
     const code = Math.random().toString(36).substr(2, 4).toUpperCase();
     const calls = (await fetchThemeCalls(themeId)) || _FALLBACK_CALLS.office;
     const card = generateCard(calls);
@@ -262,16 +254,17 @@ export const useBingoStore = create((set, get) => ({
 
         case 'number-called':
           set({
-            calledItems: msg.calledItems ?? [...get().calledItems, newItem],
+            calledItems: msg.calledItems ?? [...get().calledItems, msg.item],
             callQueue: Array(msg.callQueueLength ?? 0).fill(null),
           });
           // Play audio only for active players (not spectators, not pre-deal)
-          const { isSpectator, card, audioMuted } = get();
-          if (!isSpectator && card.length > 0 && newItem) {
-            playCallAudio(newItem, SERVER_BASE_URL, audioMuted);
+          {
+            const { isSpectator, card, audioMuted } = get();
+            if (!isSpectator && card.length > 0 && msg.item) {
+              playCallAudio(msg.item, SERVER_BASE_URL, audioMuted);
+            }
           }
           break;
-        }
 
         case 'game-ended':
           set({

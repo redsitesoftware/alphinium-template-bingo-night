@@ -91,13 +91,11 @@ function BingoSquare({ item, index, isMarked, isLatest, dauberColor, onPress }) 
 export default function CardScreen() {
   const {
     card, marked, dauberColor, calledItems, isHost,
-    sessionCode, playerName, themeId, isCalling, startAutoCalling, stopAutoCalling, resetGame,
+    sessionCode, playerName, themeId, isCalling, callerInterval, startAutoCalling, stopAutoCalling, resetGame,
     ws, winner, dismissWinner,
   } = useBingoStore();
   const toggleAudioMuted = useBingoStore(s => s.toggleAudioMuted);
-
-  const isReconnecting = useBingoStore(s => s.isReconnecting ?? false);
-
+  const audioMuted = useBingoStore(s => s.audioMuted);
   const isReconnecting = useBingoStore(s => s.isReconnecting ?? false);
 
   const [currentCall, setCurrentCall] = useState('');
