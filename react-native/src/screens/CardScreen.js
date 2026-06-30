@@ -3,7 +3,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Animated, ActivityIndicator,
+  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Animated, Modal,
 } from 'react-native';
 import { useBingoStore } from '../store/bingoStore';
 import { colors, spacing, radius, typography } from '../theme';
@@ -91,9 +91,8 @@ function BingoSquare({ item, index, isMarked, isLatest, dauberColor, onPress }) 
 export default function CardScreen() {
   const {
     card, marked, dauberColor, calledItems, isHost,
-    sessionCode, playerName, themeId, isCalling, callerInterval,
-    startAutoCalling, stopAutoCalling, resetGame,
-    ws,
+    sessionCode, playerName, themeId, isCalling, startAutoCalling, stopAutoCalling, resetGame,
+    ws, winner, dismissWinner,
   } = useBingoStore();
   const toggleAudioMuted = useBingoStore(s => s.toggleAudioMuted);
 
@@ -165,11 +164,20 @@ export default function CardScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
-      {isReconnecting && (
-        <View style={s.reconnectBanner}>
-          <ActivityIndicator size="small" color={colors.bg} style={s.reconnectSpinner} />
-          <Text style={s.reconnectText}>Reconnecting… Please wait</Text>
-        </View>
+      {winner && (
+        <Modal transparent animationType="fade">
+          <View style={s.modalBackdrop}>
+            <View style={s.winnerCard}>
+              <Text style={s.winnerEmoji}>🏆</Text>
+              <Text style={s.winnerName}>{winner.winnerName}</Text>
+              <Text style={s.winnerType}>{winner.winType}</Text>
+              {winner.prize ? <Text style={s.winnerPrize}>Prize: {winner.prize}</Text> : null}
+              <TouchableOpacity onPress={dismissWinner} style={s.winnerDismiss}>
+                <Text style={s.winnerDismissText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       )}
       <ScrollView contentContainerStyle={s.content}>
         {/* Header */}
@@ -388,14 +396,22 @@ const s = StyleSheet.create({
   resetBtn:       { alignItems: 'center', paddingVertical: spacing.md },
   resetBtnText:   { color: colors.textMuted, fontSize: 14 },
 
-  reconnectBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accent,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+  modalBackdrop:    {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
+    alignItems: 'center', justifyContent: 'center', padding: spacing.xl,
   },
-  reconnectSpinner: { marginRight: spacing.sm },
-  reconnectText:  { color: colors.bg, fontSize: 13, fontWeight: '700' },
+  winnerCard:       {
+    backgroundColor: colors.card, borderRadius: radius.lg,
+    borderWidth: 2, borderColor: colors.primary,
+    padding: spacing.xxl, alignItems: 'center', width: '100%', maxWidth: 360,
+  },
+  winnerEmoji:      { fontSize: 56, marginBottom: spacing.md },
+  winnerName:       { ...typography.title, color: colors.text, textAlign: 'center', marginBottom: spacing.sm },
+  winnerType:       { fontSize: 16, color: colors.primary, fontWeight: '700', textAlign: 'center', marginBottom: spacing.sm },
+  winnerPrize:      { fontSize: 15, color: colors.textSub, textAlign: 'center', marginBottom: spacing.lg },
+  winnerDismiss:    {
+    marginTop: spacing.md, backgroundColor: colors.primary,
+    borderRadius: radius.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.xl,
+  },
+  winnerDismissText: { color: colors.black, fontSize: 16, fontWeight: '800' },
 });

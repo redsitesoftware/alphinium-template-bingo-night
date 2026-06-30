@@ -133,6 +133,9 @@ export const useBingoStore = create((set, get) => ({
   callInterval: null,
   callerInterval: 10,     // seconds between auto-calls (synced from server)
 
+  // Winner
+  winner: null,           // { winnerName, winType, prize } or null
+
   // WebSocket
   ws: null,
   wsConnected: false,
@@ -148,21 +151,15 @@ export const useBingoStore = create((set, get) => ({
     set({ audioMuted: next });
   },
 
-  /** Fetch theme list from the server. Falls back to FALLBACK_THEMES on error. */
-  fetchThemes: async () => {
-    set({ themesLoading: true });
-    try {
-      const res = await fetch(THEMES_API_URL);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const themes = await res.json();
-      if (Array.isArray(themes) && themes.length > 0) {
-        set({ themes, themesLoading: false });
-        return;
-      }
-      throw new Error('Empty theme list');
-    } catch (err) {
-      console.warn('[bingoStore] fetchThemes failed, using fallback:', err.message);
-      set({ themes: FALLBACK_THEMES, themesLoading: false });
+  dismissWinner: () => set({ winner: null }),
+
+  startAsHost: (name, themeId, prize = '') => {
+    const code = Math.random().toString(36).substr(2, 4).toUpperCase();
+    const card = generateCard(themeId);
+    const pool = [...(CALLS_BY_THEME[themeId] || CALLS_BY_THEME.office)];
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
     }
   },
 
@@ -176,14 +173,16 @@ export const useBingoStore = create((set, get) => ({
       playerName: name,
       sessionCode: code,
       themeId,
+      prize: prize || '',
       card,
       marked: new Set([12]), // FREE center
       wins: [],
       calledItems: [],
       callQueue: [],
       isCalling: false,
+      winner: null,
     });
-    get().connectWS(code, name);
+    get().connectWS(code, name, prize);
   },
 
   joinAsSpectator: (code) => {
@@ -221,11 +220,7 @@ export const useBingoStore = create((set, get) => ({
   },
 
   // WebSocket actions
-  _intentionalClose: false,
-  _reconnectDelay: 1000,
-  _reconnectTimer: null,
-
-  connectWS: (code, playerName) => {
+  connectWS: (code, playerName, prize = '') => {
     const { ws: existing } = get();
     if (existing) {
       existing.onopen = null;
@@ -239,12 +234,8 @@ export const useBingoStore = create((set, get) => ({
     const ws = new WebSocket(`${WS_PROTOCOL}://${SERVER_HOST}/rooms`);
 
     ws.onopen = () => {
-      const { card } = get();
-      set({ wsConnected: true, isReconnecting: false, _reconnectDelay: 1000 });
-      ws.send(JSON.stringify({ type: 'join-room', payload: { code, playerName } }));
-      if (card && card.length > 0) {
-        ws.send(JSON.stringify({ type: 'save-card', payload: { code, playerName, card } }));
-      }
+      ws.send(JSON.stringify({ type: 'join-room', payload: { code, playerName, prize } }));
+      set({ wsConnected: true });
     };
 
     ws.onmessage = (event) => {
@@ -289,6 +280,10 @@ export const useBingoStore = create((set, get) => ({
             callQueue: [],
             isCalling: false,
           });
+          break;
+
+        case 'winner-announced':
+          set({ winner: { winnerName: msg.winnerName, winType: msg.winType, prize: msg.prize } });
           break;
 
         default:
@@ -389,6 +384,7 @@ export const useBingoStore = create((set, get) => ({
       card: [],
       marked: new Set(),
       wins: [],
+      winner: null,
       calledItems: [],
       callQueue: [],
       isCalling: false,
