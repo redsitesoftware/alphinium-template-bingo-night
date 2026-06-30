@@ -40,11 +40,4 @@ function getHistory() {
   return history;
 }
 
-/**
- * Reset the history array. Intended for use in tests only.
- */
-function resetHistory() {
-  history.length = 0;
-}
-
-module.exports = { saveGame, getHistory, resetHistory };
+module.exports = { saveGame, getHistory };
